@@ -164,15 +164,11 @@ func (g *Game) doTick() {
 	orderCopy := make([]string, len(g.nickOrder))
 	copy(orderCopy, g.nickOrder)
 
-	frame := renderFrame(stateCopy, deadCopy, orderCopy)
-
 	for nick, player := range g.players {
-		data := make([]byte, len(frame))
-		copy(data, frame)
+		overlayNick := ""
 		if deadCopy[nick] {
-			overlay := renderDeathOverlay(nick)
-			data = append(data, overlay...)
+			overlayNick = nick
 		}
-		player.enqueue(data)
+		player.enqueue(renderFrame(stateCopy, deadCopy, orderCopy, overlayNick))
 	}
 }
