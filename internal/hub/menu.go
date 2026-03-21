@@ -13,17 +13,19 @@ import (
 )
 
 type menu struct {
-	sess    gossh.Session
-	manager *lobby.Manager
-	nick    string
-	pty     gossh.Pty
-	winCh   <-chan gossh.Window
-	w       int
-	h       int
+	sess         gossh.Session
+	manager      *lobby.Manager
+	nick         string
+	pty          gossh.Pty
+	winCh        <-chan gossh.Window
+	w            int
+	h            int
+	createLobby  func(lobby.GameType) (*lobby.Lobby, error)
+	connectLobby func(string)
 }
 
 func newMenu(sess gossh.Session, m *lobby.Manager, nick string, pty gossh.Pty, winCh <-chan gossh.Window) *menu {
-	return &menu{
+	menu := &menu{
 		sess:    sess,
 		manager: m,
 		nick:    nick,
@@ -32,6 +34,12 @@ func newMenu(sess gossh.Session, m *lobby.Manager, nick string, pty gossh.Pty, w
 		w:       pty.Window.Width,
 		h:       pty.Window.Height,
 	}
+	menu.createLobby = m.CreateLobby
+	menu.connectLobby = func(lobbyID string) {
+		proxy := newProxy(menu.manager, lobbyID)
+		proxy.connect(menu.sess, menu.nick, menu.pty, menu.winCh)
+	}
+	return menu
 }
 
 func (m *menu) write(s string) {
@@ -58,7 +66,7 @@ func (m *menu) run() {
 			game = lobby.GameType(selected)
 		}
 
-		action := m.selectLobby(game, games)
+		action := m.selectLobby(game)
 		if action == "back" {
 			continue
 		}
@@ -162,7 +170,7 @@ func availableGames() []gameOption {
 	}
 }
 
-func (m *menu) selectLobby(game lobby.GameType, games []gameOption) string {
+func (m *menu) selectLobby(game lobby.GameType) string {
 	readBuf := make([]byte, 3)
 	cursor := 0
 	message := ""
@@ -229,24 +237,14 @@ func (m *menu) selectLobby(game lobby.GameType, games []gameOption) string {
 			}
 		case "enter":
 			if cursor == len(items)-1 {
-				selectedGame := game
-				if len(games) > 1 {
-					selected := m.selectGame(games)
-					if selected == "" {
-						message = "создание лобби отменено"
-						continue
-					}
-					selectedGame = lobby.GameType(selected)
-				}
-				message = fmt.Sprintf("создаём %s лобби...", strings.ToUpper(string(selectedGame)))
+				message = fmt.Sprintf("создаём %s лобби...", strings.ToUpper(string(game)))
 				m.write(fmt.Sprintf("\r\n  %s%s%s\r\n", tui.FgGray+tui.Dim, message, tui.Reset))
-				lob, err := m.manager.CreateLobby(selectedGame)
+				lob, err := m.createLobby(game)
 				if err != nil {
 					message = fmt.Sprintf("ошибка: %v", err)
 					continue
 				}
-				proxy := newProxy(m.manager, lob.ID)
-				proxy.connect(m.sess, m.nick, m.pty, m.winCh)
+				m.connectLobby(lob.ID)
 				return "back"
 			}
 			lob := lobbies[cursor]
@@ -259,8 +257,7 @@ func (m *menu) selectLobby(game lobby.GameType, games []gameOption) string {
 				message = "лобби недоступно"
 				continue
 			}
-			proxy := newProxy(m.manager, full.ID)
-			proxy.connect(m.sess, m.nick, m.pty, m.winCh)
+			m.connectLobby(full.ID)
 			return "back"
 		case "q", "Q":
 			return "quit"
