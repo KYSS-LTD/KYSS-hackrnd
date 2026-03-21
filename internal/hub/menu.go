@@ -159,6 +159,7 @@ func availableGames() []gameOption {
 	return []gameOption{
 		{"snake", "SNAKE", "классическая змейка, до 6 игроков"},
 		{"pingpong", "PING PONG", "дуэль на ракетках, 1v1 или против бота"},
+		{"kitchen", "KITCHEN RUSH", "кооп-кухня патчей, 1-4 игрока"},
 	}
 }
 

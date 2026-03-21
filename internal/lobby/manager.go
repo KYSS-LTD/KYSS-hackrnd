@@ -22,6 +22,7 @@ type Manager struct {
 	docker        *dockerclient.Client
 	snakeImage    string
 	pingPongImage string
+	kitchenImage  string
 	dockerNet     string
 	nextID        int
 }
@@ -66,6 +67,10 @@ func NewManager() (*Manager, error) {
 	if pingPongImage == "" {
 		pingPongImage = "ssh-games-pingpong:latest"
 	}
+	kitchenImage := os.Getenv("KITCHEN_IMAGE")
+	if kitchenImage == "" {
+		kitchenImage = "ssh-games-kitchen:latest"
+	}
 	dockerNet := os.Getenv("DOCKER_NETWORK")
 	if dockerNet == "" {
 		dockerNet = "games-net"
@@ -76,6 +81,7 @@ func NewManager() (*Manager, error) {
 		docker:        cli,
 		snakeImage:    snakeImage,
 		pingPongImage: pingPongImage,
+		kitchenImage:  kitchenImage,
 		dockerNet:     dockerNet,
 	}
 
@@ -95,6 +101,8 @@ func (m *Manager) CreateLobby(game GameType) (*Lobby, error) {
 		image = m.snakeImage
 	case GamePingPong:
 		image = m.pingPongImage
+	case GameKitchen:
+		image = m.kitchenImage
 	default:
 		return nil, fmt.Errorf("unknown game: %s", game)
 	}
@@ -272,6 +280,8 @@ func maxPlayersForGame(game GameType) int {
 		return 2
 	case GameSnake:
 		return 6
+	case GameKitchen:
+		return 4
 	default:
 		return 8
 	}
