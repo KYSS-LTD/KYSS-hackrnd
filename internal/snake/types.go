@@ -1,8 +1,8 @@
 package snake
 
 const (
-	Width  = 16
-	Height = 9
+	Width  = 32
+	Height = 18
 )
 
 type Point struct {
