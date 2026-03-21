@@ -13,54 +13,54 @@ const (
 	cellApple = "()"
 )
 
-func renderBase(players map[string]*Player, apples []Point) []byte {
+func renderFrame(state *GameState, dead map[string]bool, order []string) []byte {
 	var buf bytes.Buffer
 
 	buf.WriteString("\x1b[H")
 
 	buf.WriteString("╔")
-	for i := 0; i < FieldWidth; i++ {
+	for i := 0; i < Width; i++ {
 		buf.WriteString("══")
 	}
 	buf.WriteString("╗\r\n")
 
-	for y := 0; y < FieldHeight; y++ {
+	for y := 0; y < Height; y++ {
 		buf.WriteString("║")
-		for x := 0; x < FieldWidth; x++ {
-			buf.WriteString(cellAt(players, apples, x, y))
+		for x := 0; x < Width; x++ {
+			buf.WriteString(cellAt(state, dead, x, y))
 		}
 		buf.WriteString("║\r\n")
 	}
 
 	buf.WriteString("╚")
-	for i := 0; i < FieldWidth; i++ {
+	for i := 0; i < Width; i++ {
 		buf.WriteString("══")
 	}
 	buf.WriteString("╝\r\n")
 
-	renderLeaderboard(&buf, players)
+	renderLeaderboard(&buf, state, dead, order)
 
 	return buf.Bytes()
 }
 
-func cellAt(players map[string]*Player, apples []Point, x, y int) string {
+func cellAt(state *GameState, dead map[string]bool, x, y int) string {
 	pt := Point{x, y}
 
-	for _, p := range players {
-		if !p.IsAlive() {
+	for nick, s := range state.Snakes {
+		if dead[nick] || len(s.Body) == 0 {
 			continue
 		}
-		if p.Snake.Body[0].Equal(pt) {
-			return nickHead(p.Nick)
+		if s.Body[0].Equal(pt) {
+			return nickHead(nick)
 		}
-		for _, b := range p.Snake.Body[1:] {
+		for _, b := range s.Body[1:] {
 			if b.Equal(pt) {
 				return cellBody
 			}
 		}
 	}
 
-	for _, a := range apples {
+	for _, a := range state.Apples {
 		if a.Equal(pt) {
 			return cellApple
 		}
@@ -69,30 +69,41 @@ func cellAt(players map[string]*Player, apples []Point, x, y int) string {
 	return cellEmpty
 }
 
-func renderLeaderboard(buf *bytes.Buffer, players map[string]*Player) {
+func renderLeaderboard(buf *bytes.Buffer, state *GameState, dead map[string]bool, order []string) {
 	type entry struct {
 		nick  string
 		score int
 		dead  bool
 	}
 
-	var entries []entry
-	for nick, p := range players {
-		entries = append(entries, entry{
-			nick:  nick,
-			score: p.Snake.Len(),
-			dead:  !p.IsAlive(),
-		})
+	entries := make([]entry, 0, len(state.Snakes))
+	seen := make(map[string]bool, len(order))
+	for _, nick := range order {
+		s, ok := state.Snakes[nick]
+		if !ok {
+			continue
+		}
+		entries = append(entries, entry{nick: nick, score: scoreFor(state, nick, s), dead: dead[nick]})
+		seen[nick] = true
+	}
+	for nick, s := range state.Snakes {
+		if seen[nick] {
+			continue
+		}
+		entries = append(entries, entry{nick: nick, score: scoreFor(state, nick, s), dead: dead[nick]})
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
+	sort.SliceStable(entries, func(i, j int) bool {
 		if entries[i].dead != entries[j].dead {
 			return !entries[i].dead
 		}
-		return entries[i].score > entries[j].score
+		if entries[i].score != entries[j].score {
+			return entries[i].score > entries[j].score
+		}
+		return entries[i].nick < entries[j].nick
 	})
 
-	lineW := FieldWidth*2 + 2
+	lineW := Width*2 + 2
 	buf.WriteString(strings.Repeat("─", lineW) + "\r\n")
 	buf.WriteString("  LEADERBOARD\r\n")
 
@@ -105,10 +116,7 @@ func renderLeaderboard(buf *bytes.Buffer, players map[string]*Player) {
 		if e.dead {
 			deadMark = "  [DEAD]"
 		}
-		nick := e.nick
-		if len([]rune(nick)) > 10 {
-			nick = string([]rune(nick)[:10])
-		}
+		nick := trimRunes(e.nick, 10)
 		line := fmt.Sprintf("  %d. %-10s  %s%-3d%s\r\n", i+1, nick, bar, e.score, deadMark)
 		buf.WriteString(line)
 	}
@@ -121,15 +129,21 @@ func renderLeaderboard(buf *bytes.Buffer, players map[string]*Player) {
 	buf.WriteString("  WASD: move   C: respawn   Q: quit\r\n")
 }
 
-func renderDeathOverlay() []byte {
+func renderDeathOverlay(nick string) []byte {
 	var buf bytes.Buffer
 
-	col := 9
+	col := 7
 	row := 4
+	name := trimRunes(nick, 12)
+	if name == "" {
+		name = "player"
+	}
+	nameLine := fmt.Sprintf("║ %-16s ║", name)
 
 	lines := []string{
 		"╔══════════════════╗",
 		"║    YOU  DIED!    ║",
+		nameLine,
 		"║  Press C to      ║",
 		"║    respawn       ║",
 		"╚══════════════════╝",
@@ -140,4 +154,27 @@ func renderDeathOverlay() []byte {
 	}
 
 	return buf.Bytes()
+}
+
+func nickHead(nick string) string {
+	runes := []rune(strings.ToUpper(strings.TrimSpace(nick)))
+	if len(runes) == 0 {
+		return "[]"
+	}
+	return fmt.Sprintf("[%c]", runes[0])
+}
+
+func scoreFor(state *GameState, nick string, s *Snake) int {
+	if score, ok := state.Scores[nick]; ok {
+		return score
+	}
+	return s.Len() - 2
+}
+
+func trimRunes(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max])
 }
