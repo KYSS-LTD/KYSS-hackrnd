@@ -30,17 +30,3 @@ func TestRenderHeaderHandlesNarrowWidths(t *testing.T) {
 		}
 	}
 }
-
-func TestAvailableGamesIncludesKitchen(t *testing.T) {
-	games := availableGames()
-	foundKitchen := false
-	for _, game := range games {
-		if game.id == "kitchen" {
-			foundKitchen = true
-			break
-		}
-	}
-	if !foundKitchen {
-		t.Fatalf("availableGames() missing kitchen: %#v", games)
-	}
-}

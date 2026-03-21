@@ -24,5 +24,4 @@ services:
       LISTEN_ADDR: ":2222"
       SNAKE_IMAGE: "ssh-games-snake:latest"
       PINGPONG_IMAGE: "ssh-games-pingpong:latest"
-      KITCHEN_IMAGE: "ssh-games-kitchen:latest"
       DOCKER_NETWORK: "games-net"
