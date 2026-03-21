@@ -55,15 +55,6 @@ func renderFrame(state *GameState, dead map[string]bool, order []string, colors 
 	buf.WriteString("\x1b[H")
 	buf.WriteString(colorTitle)
 	buf.WriteString("  TERMINAL SNAKE")
-	buf.WriteString(colorMuted)
-	buf.WriteString(strings.Repeat(" ", max(2, fieldWidth-14)))
-	buf.WriteString(colorTitle)
-	buf.WriteString("OLD-SCHOOL ARENA")
-	buf.WriteString(colorReset)
-	buf.WriteString("\r\n")
-	buf.WriteString(colorMuted)
-	buf.WriteString("  monochrome UI inspired by terminal-snake")
-	buf.WriteString(colorReset)
 	buf.WriteString("\r\n")
 
 	buf.WriteString(colorBorder)
@@ -106,7 +97,7 @@ func renderFrame(state *GameState, dead map[string]bool, order []string, colors 
 	buf.WriteString("\r\n")
 
 	buf.WriteString(colorMuted)
-	buf.WriteString("  ←↑↓→ / WASD / ЦФЫВ")
+	buf.WriteString("  ←↑↓→ / WASD")
 	buf.WriteString(colorInk)
 	buf.WriteString(" move  ")
 	buf.WriteString(colorMuted)
@@ -262,11 +253,6 @@ func renderPanelLines(state *GameState, dead map[string]bool, order []string, co
 	for len(lines) < Height-3 {
 		lines = append(lines, panelBlank())
 	}
-	lines = append(lines,
-		panelLabel("CONTROLS"),
-		panelText("WASD / arrows / ЦФЫВ"),
-		panelText("C respawn  Q quit"),
-	)
 
 	return lines
 }
