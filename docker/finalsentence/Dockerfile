@@ -1,12 +1,14 @@
-FROM golang:1.23-alpine AS build
+FROM golang:1.25-alpine AS builder
 WORKDIR /src
+COPY go.mod ./
+RUN go mod download || true
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/finalsentence ./cmd/finalsentence
+RUN go mod tidy && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /finalsentence ./cmd/finalsentence
 
-FROM alpine:3.20
-RUN adduser -D -u 10001 app
-WORKDIR /app
-COPY --from=build /out/finalsentence /usr/local/bin/finalsentence
-USER app
+FROM alpine:3.19
+RUN apk add --no-cache ca-certificates
+RUN mkdir -p /data
+COPY --from=builder /finalsentence /finalsentence
 EXPOSE 2222
-ENTRYPOINT ["/usr/local/bin/finalsentence"]
+ENTRYPOINT ["/finalsentence"]
