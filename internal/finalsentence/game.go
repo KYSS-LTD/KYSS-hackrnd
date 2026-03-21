@@ -123,6 +123,7 @@ func (g *Game) loop() {
 			g.mu.Unlock()
 		case now := <-ticker.C:
 			g.mu.Lock()
+			g.clearExpiredMistakesLocked(now)
 			if now.Sub(g.roundStart) >= roundDuration {
 				g.finishRoundLocked(now)
 				g.startRound(now)
@@ -140,6 +141,10 @@ func (g *Game) handleInput(nick, key string, now time.Time) {
 	}
 	if key == "enter" || key == "up" || key == "down" || key == "left" || key == "right" {
 		return
+	}
+	if !prog.blockedUntil.IsZero() && !now.Before(prog.blockedUntil) {
+		prog.mistake = nil
+		prog.blockedUntil = time.Time{}
 	}
 	if now.Before(prog.blockedUntil) {
 		return
@@ -181,6 +186,16 @@ func (g *Game) handleInput(nick, key string, now time.Time) {
 			prog.mistake = nil
 			prog.blockedUntil = time.Time{}
 		}
+	}
+}
+
+func (g *Game) clearExpiredMistakesLocked(now time.Time) {
+	for _, prog := range g.progress {
+		if prog == nil || prog.blockedUntil.IsZero() || now.Before(prog.blockedUntil) {
+			continue
+		}
+		prog.mistake = nil
+		prog.blockedUntil = time.Time{}
 	}
 }
 
