@@ -5,8 +5,9 @@ import "time"
 type GameType string
 
 const (
-	GameSnake    GameType = "snake"
-	GamePingPong GameType = "pingpong"
+	GameSnake         GameType = "snake"
+	GamePingPong      GameType = "pingpong"
+	GameFinalSentence GameType = "finalsentence"
 )
 
 type Lobby struct {
