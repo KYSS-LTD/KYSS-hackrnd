@@ -157,7 +157,7 @@ type gameOption struct {
 
 func availableGames() []gameOption {
 	return []gameOption{
-		{"snake", "SNAKE", "классическая змейка, до 8 игроков"},
+		{"snake", "SNAKE", "классическая змейка, до 6 игроков"},
 		{"pingpong", "PING PONG", "дуэль на ракетках, 1v1 или против бота"},
 	}
 }
@@ -178,7 +178,6 @@ func (m *menu) selectLobby(game lobby.GameType, games []gameOption) string {
 			items = append(items, fmt.Sprintf("лобби %s  [%d/%d]", l.ID, l.Players, l.MaxPlayers))
 		}
 		items = append(items, "создать новое лобби")
-		items = append(items, "← назад")
 
 		if cursor >= len(items) {
 			cursor = len(items) - 1
@@ -190,8 +189,7 @@ func (m *menu) selectLobby(game lobby.GameType, games []gameOption) string {
 		m.write(fmt.Sprintf("  %s%s%s — выберите лобби:\r\n\r\n", tui.Bold+tui.FgWhite, strings.ToUpper(string(game)), tui.Reset))
 
 		for i, item := range items {
-			isCreate := i == len(items)-2
-			isBack := i == len(items)-1
+			isCreate := i == len(items)-1
 			sep := ""
 			if isCreate {
 				sep = "\r\n"
@@ -201,11 +199,7 @@ func (m *menu) selectLobby(game lobby.GameType, games []gameOption) string {
 			if i == cursor {
 				line = fmt.Sprintf("  %s%s▶ %s%s%s", sep, tui.Bold+tui.FgWhite, tui.Reset+tui.Bold+tui.FgWhite, item, tui.Reset)
 			} else {
-				color := tui.FgGray
-				if isBack {
-					color = tui.Dim + tui.FgGray
-				}
-				line = fmt.Sprintf("  %s  %s%s%s", sep, color, item, tui.Reset)
+				line = fmt.Sprintf("  %s  %s%s%s", sep, tui.FgGray, item, tui.Reset)
 			}
 			m.write(line + "\r\n")
 		}
@@ -235,9 +229,6 @@ func (m *menu) selectLobby(game lobby.GameType, games []gameOption) string {
 			}
 		case "enter":
 			if cursor == len(items)-1 {
-				return "back"
-			}
-			if cursor == len(items)-2 {
 				selectedGame := game
 				if len(games) > 1 {
 					selected := m.selectGame(games)

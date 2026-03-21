@@ -9,6 +9,8 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
+	"unicode/utf8"
 
 	gossh "github.com/gliderlabs/ssh"
 	"golang.org/x/crypto/ssh"
@@ -62,6 +64,22 @@ func (s *Server) handleSession(sess gossh.Session) {
 	}
 
 	nick = sanitizeNick(nick)
+	player := newPlayer(nick, sess)
+	if err := s.game.Join(nick, player); err != nil {
+		player.close()
+		message := "\r\nне удалось подключиться\r\n"
+		switch err.Error() {
+		case fmt.Sprintf("nick %q is already online", nick):
+			message = "\r\nошибка: игрок с таким ником уже онлайн\r\n"
+		case "lobby is full":
+			message = "\r\nошибка: лобби заполнено\r\n"
+		}
+		io.WriteString(sess, message)
+		io.WriteString(sess, "соединение будет закрыто через 3 секунды...\r\n")
+		time.Sleep(3 * time.Second)
+		return
+	}
+	defer s.game.Leave(nick)
 
 	io.WriteString(sess, "\x1b[?1049h")
 	io.WriteString(sess, "\x1b[?25l")
@@ -72,18 +90,14 @@ func (s *Server) handleSession(sess gossh.Session) {
 		io.WriteString(sess, "\x1b[?1049l")
 	}()
 
-	player := newPlayer(nick, sess)
-	s.game.Join(nick, player)
-	defer s.game.Leave(nick)
-
-	buf := make([]byte, 3)
+	buf := make([]byte, 8)
 	for {
 		n, err := sess.Read(buf)
 		if err != nil {
 			return
 		}
 		key := parseInput(buf[:n])
-		if key == "ctrl-c" || key == "q" || key == "Q" {
+		if key == "ctrl-c" || key == "q" || key == "Q" || key == "й" || key == "Й" {
 			return
 		}
 		s.game.Input(nick, key)
@@ -94,7 +108,7 @@ func parseInput(b []byte) string {
 	if len(b) == 0 {
 		return ""
 	}
-	if len(b) == 3 && b[0] == 0x1b && b[1] == '[' {
+	if len(b) >= 3 && b[0] == 0x1b && b[1] == '[' {
 		switch b[2] {
 		case 'A':
 			return "up"
@@ -106,13 +120,14 @@ func parseInput(b []byte) string {
 			return "left"
 		}
 	}
-	switch b[0] {
+	r, _ := utf8.DecodeRune(b)
+	switch r {
 	case 3:
 		return "ctrl-c"
 	case 13, 10:
 		return "enter"
 	default:
-		return string([]rune{rune(b[0])})
+		return string(r)
 	}
 }
 

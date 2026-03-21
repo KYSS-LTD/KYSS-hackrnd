@@ -270,6 +270,8 @@ func maxPlayersForGame(game GameType) int {
 	switch game {
 	case GamePingPong:
 		return 2
+	case GameSnake:
+		return 6
 	default:
 		return 8
 	}
