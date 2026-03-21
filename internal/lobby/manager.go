@@ -17,12 +17,13 @@ import (
 )
 
 type Manager struct {
-	mu         sync.RWMutex
-	lobbies    map[string]*Lobby
-	docker     *dockerclient.Client
-	snakeImage string
-	dockerNet  string
-	nextID     int
+	mu            sync.RWMutex
+	lobbies       map[string]*Lobby
+	docker        *dockerclient.Client
+	snakeImage    string
+	pingPongImage string
+	dockerNet     string
+	nextID        int
 }
 
 func newDockerClient(ctx context.Context) (*dockerclient.Client, error) {
@@ -61,16 +62,21 @@ func NewManager() (*Manager, error) {
 	if snakeImage == "" {
 		snakeImage = "ssh-games-snake:latest"
 	}
+	pingPongImage := os.Getenv("PINGPONG_IMAGE")
+	if pingPongImage == "" {
+		pingPongImage = "ssh-games-pingpong:latest"
+	}
 	dockerNet := os.Getenv("DOCKER_NETWORK")
 	if dockerNet == "" {
 		dockerNet = "games-net"
 	}
 
 	m := &Manager{
-		lobbies:    make(map[string]*Lobby),
-		docker:     cli,
-		snakeImage: snakeImage,
-		dockerNet:  dockerNet,
+		lobbies:       make(map[string]*Lobby),
+		docker:        cli,
+		snakeImage:    snakeImage,
+		pingPongImage: pingPongImage,
+		dockerNet:     dockerNet,
 	}
 
 	go m.cleanupLoop()
@@ -87,6 +93,8 @@ func (m *Manager) CreateLobby(game GameType) (*Lobby, error) {
 	switch game {
 	case GameSnake:
 		image = m.snakeImage
+	case GamePingPong:
+		image = m.pingPongImage
 	default:
 		return nil, fmt.Errorf("unknown game: %s", game)
 	}
@@ -128,7 +136,7 @@ func (m *Manager) CreateLobby(game GameType) (*Lobby, error) {
 		ContainerID: resp.ID,
 		Addr:        addr,
 		Players:     0,
-		MaxPlayers:  8,
+		MaxPlayers:  maxPlayersForGame(game),
 		CreatedAt:   time.Now(),
 	}
 
@@ -255,5 +263,14 @@ func (m *Manager) PruneOrphans() {
 			m.docker.ContainerRemove(ctx, c.ID, types.ContainerRemoveOptions{Force: true})
 			io.Discard.Write(nil)
 		}
+	}
+}
+
+func maxPlayersForGame(game GameType) int {
+	switch game {
+	case GamePingPong:
+		return 2
+	default:
+		return 8
 	}
 }

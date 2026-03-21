@@ -46,17 +46,19 @@ func (m *menu) run() {
 		m.write(tui.AltScreenOff)
 	}()
 
+	games := availableGames()
+
 	for {
 		game := lobby.GameSnake
-		if len(availableGames()) > 1 {
-			selected := m.selectGame()
+		if len(games) > 1 {
+			selected := m.selectGame(games)
 			if selected == "" {
 				return
 			}
 			game = lobby.GameType(selected)
 		}
 
-		action := m.selectLobby(game)
+		action := m.selectLobby(game, games)
 		if action == "back" {
 			continue
 		}
@@ -93,9 +95,7 @@ func (m *menu) drawHeader() {
 	m.write(tui.Reset)
 }
 
-func (m *menu) selectGame() string {
-	games := availableGames()
-
+func (m *menu) selectGame(games []gameOption) string {
 	cursor := 0
 
 	readBuf := make([]byte, 3)
@@ -143,21 +143,20 @@ func (m *menu) selectGame() string {
 	}
 }
 
-func availableGames() []struct {
+type gameOption struct {
 	id   string
 	name string
 	desc string
-} {
-	return []struct {
-		id   string
-		name string
-		desc string
-	}{
+}
+
+func availableGames() []gameOption {
+	return []gameOption{
 		{"snake", "SNAKE", "классическая змейка, до 8 игроков"},
+		{"pingpong", "PING PONG", "дуэль на ракетках, 1v1 или против бота"},
 	}
 }
 
-func (m *menu) selectLobby(game lobby.GameType) string {
+func (m *menu) selectLobby(game lobby.GameType, games []gameOption) string {
 	readBuf := make([]byte, 3)
 	cursor := 0
 	message := ""
@@ -233,9 +232,18 @@ func (m *menu) selectLobby(game lobby.GameType) string {
 				return "back"
 			}
 			if cursor == len(items)-2 {
-				message = "создаём лобби..."
+				selectedGame := game
+				if len(games) > 1 {
+					selected := m.selectGame(games)
+					if selected == "" {
+						message = "создание лобби отменено"
+						continue
+					}
+					selectedGame = lobby.GameType(selected)
+				}
+				message = fmt.Sprintf("создаём %s лобби...", strings.ToUpper(string(selectedGame)))
 				m.write(fmt.Sprintf("\r\n  %s%s%s\r\n", tui.FgGray+tui.Dim, message, tui.Reset))
-				lob, err := m.manager.CreateLobby(game)
+				lob, err := m.manager.CreateLobby(selectedGame)
 				if err != nil {
 					message = fmt.Sprintf("ошибка: %v", err)
 					continue

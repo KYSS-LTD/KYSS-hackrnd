@@ -1,6 +1,6 @@
-.PHONY: build build-hub build-snake run-hub run-snake docker-build docker-up docker-down test
+.PHONY: build build-hub build-snake build-pingpong run-hub run-snake run-pingpong docker-build docker-up docker-down test
 
-build: build-hub build-snake
+build: build-hub build-snake build-pingpong
 
 build-hub:
 	go build -o bin/hub ./cmd/hub
@@ -8,14 +8,21 @@ build-hub:
 build-snake:
 	go build -o bin/snake ./cmd/snake
 
+build-pingpong:
+	go build -o bin/pingpong ./cmd/pingpong
+
 run-hub:
-	LISTEN_ADDR=:2222 SNAKE_IMAGE=ssh-games-snake:latest DOCKER_NETWORK=games-net go run ./cmd/hub
+	LISTEN_ADDR=:2222 SNAKE_IMAGE=ssh-games-snake:latest PINGPONG_IMAGE=ssh-games-pingpong:latest DOCKER_NETWORK=games-net go run ./cmd/hub
 
 run-snake:
 	LISTEN_ADDR=:2223 go run ./cmd/snake
 
+run-pingpong:
+	LISTEN_ADDR=:2224 go run ./cmd/pingpong
+
 docker-build:
 	docker build -f docker/snake/Dockerfile -t ssh-games-snake:latest .
+	docker build -f docker/pingpong/Dockerfile -t ssh-games-pingpong:latest .
 	docker build -f docker/hub/Dockerfile -t ssh-games-hub:latest .
 
 docker-up: docker-build
