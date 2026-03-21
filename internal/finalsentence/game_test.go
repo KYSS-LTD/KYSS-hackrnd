@@ -50,16 +50,21 @@ func TestHandleInputBlocksAfterMistake(t *testing.T) {
 		t.Fatalf("input during lock should be ignored")
 	}
 
+	g.clearExpiredMistakesLocked(now.Add(inputLockTime))
+	if prog.mistake != nil {
+		t.Fatalf("mistake should be cleared when lock expires")
+	}
+	if !prog.blockedUntil.IsZero() {
+		t.Fatalf("blockedUntil should reset when lock expires")
+	}
+
 	g.handleInput("ada", string([]rune(g.currentLines()[0])[0]), now.Add(inputLockTime))
 	if len(prog.typed) != 1 {
 		t.Fatalf("correct input after lock should advance progress")
 	}
-	if prog.mistake != nil {
-		t.Fatalf("mistake should be cleared after correct retry")
-	}
 }
 
-func TestRenderActiveLineShowsLockAndRetryStates(t *testing.T) {
+func TestRenderActiveLineShowsLockAndExpectedStates(t *testing.T) {
 	line := "ab"
 	locked := renderActiveLine(line, playerSnapshot{
 		Mistake:      &mistakeState{value: 'x', index: 0},
@@ -72,11 +77,9 @@ func TestRenderActiveLineShowsLockAndRetryStates(t *testing.T) {
 		t.Fatalf("locked state should dim upcoming text: %q", locked)
 	}
 
-	unlocked := renderActiveLine(line, playerSnapshot{
-		Mistake: &mistakeState{value: 'x', index: 0},
-	}, 4)
-	if !strings.Contains(unlocked, colorBlue+"x") {
-		t.Fatalf("unlocked state should render mistake in blue: %q", unlocked)
+	unlocked := renderActiveLine(line, playerSnapshot{}, 4)
+	if !strings.Contains(unlocked, colorAccent+"a") {
+		t.Fatalf("unlocked state should restore expected symbol: %q", unlocked)
 	}
 	if !strings.Contains(unlocked, colorWhite+"b") {
 		t.Fatalf("unlocked state should restore white text: %q", unlocked)
