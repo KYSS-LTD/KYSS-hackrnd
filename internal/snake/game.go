@@ -167,14 +167,14 @@ func (g *Game) handleInput(nick, key string) {
 }
 
 func (g *Game) respawn(nick string) {
-	pos := g.state.freeSpawnPoint()
+	spawn := g.state.freeSpawn()
 	s := g.state.Snakes[nick]
 	if s == nil {
 		return
 	}
-	s.Body = []Point{pos, {pos.X - 1, pos.Y}}
-	s.Dir = DirRight
-	s.NextDir = DirRight
+	s.Body = []Point{spawn.Head, g.state.spawnTail(spawn.Head, spawn.Dir)}
+	s.Dir = spawn.Dir
+	s.NextDir = spawn.Dir
 	s.Growing = 0
 	g.state.Scores[nick] = 0
 	g.deadPlayers[nick] = false
