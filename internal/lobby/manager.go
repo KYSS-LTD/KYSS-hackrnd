@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
@@ -16,12 +17,12 @@ import (
 )
 
 type Manager struct {
-	mu          sync.RWMutex
-	lobbies     map[string]*Lobby
-	docker      *dockerclient.Client
-	snakeImage  string
-	dockerNet   string
-	nextID      int
+	mu         sync.RWMutex
+	lobbies    map[string]*Lobby
+	docker     *dockerclient.Client
+	snakeImage string
+	dockerNet  string
+	nextID     int
 }
 
 func NewManager() (*Manager, error) {
@@ -72,9 +73,9 @@ func (m *Manager) CreateLobby(game GameType) (*Lobby, error) {
 	cfg := &container.Config{
 		Image: image,
 		Labels: map[string]string{
-			"ssh-games":  "true",
-			"game":       string(game),
-			"lobby-id":   id,
+			"ssh-games": "true",
+			"game":      string(game),
+			"lobby-id":  id,
 		},
 	}
 	hostCfg := &container.HostConfig{
@@ -87,14 +88,14 @@ func (m *Manager) CreateLobby(game GameType) (*Lobby, error) {
 		return nil, fmt.Errorf("create container: %w", err)
 	}
 
-	if err := m.docker.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		m.docker.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+	if err := m.docker.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
+		m.docker.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{Force: true})
 		return nil, fmt.Errorf("start container: %w", err)
 	}
 
 	addr, err := m.waitForContainer(ctx, resp.ID)
 	if err != nil {
-		m.docker.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+		m.docker.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{Force: true})
 		return nil, fmt.Errorf("container not ready: %w", err)
 	}
 
@@ -207,7 +208,7 @@ func (m *Manager) cleanup() {
 
 	ctx := context.Background()
 	for _, cid := range ids {
-		m.docker.ContainerRemove(ctx, cid, container.RemoveOptions{Force: true})
+		m.docker.ContainerRemove(ctx, cid, types.ContainerRemoveOptions{Force: true})
 	}
 }
 
@@ -215,7 +216,7 @@ func (m *Manager) PruneOrphans() {
 	ctx := context.Background()
 	f := filters.NewArgs()
 	f.Add("label", "ssh-games=true")
-	containers, err := m.docker.ContainerList(ctx, container.ListOptions{Filters: f})
+	containers, err := m.docker.ContainerList(ctx, types.ContainerListOptions{Filters: f})
 	if err != nil {
 		return
 	}
@@ -228,7 +229,7 @@ func (m *Manager) PruneOrphans() {
 
 	for _, c := range containers {
 		if !known[c.ID] {
-			m.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true})
+			m.docker.ContainerRemove(ctx, c.ID, types.ContainerRemoveOptions{Force: true})
 			io.Discard.Write(nil)
 		}
 	}

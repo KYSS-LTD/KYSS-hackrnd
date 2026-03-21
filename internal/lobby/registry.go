@@ -7,27 +7,23 @@ import (
 
 type Registry struct {
 	mu      sync.RWMutex
-	lobbies map[int]*Lobby
-	nextID  int
+	lobbies map[string]*Lobby
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
-		lobbies: make(map[int]*Lobby),
-		nextID:  1,
+		lobbies: make(map[string]*Lobby),
 	}
 }
 
-func (r *Registry) Add(l *Lobby) int {
+func (r *Registry) Add(l *Lobby) string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	l.ID = r.nextID
-	r.lobbies[r.nextID] = l
-	r.nextID++
+	r.lobbies[l.ID] = l
 	return l.ID
 }
 
-func (r *Registry) Get(id int) (*Lobby, bool) {
+func (r *Registry) Get(id string) (*Lobby, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	l, ok := r.lobbies[id]
@@ -37,7 +33,7 @@ func (r *Registry) Get(id int) (*Lobby, bool) {
 func (r *Registry) List(game GameType) []*Lobby {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	var out []*Lobby
+	out := make([]*Lobby, 0, len(r.lobbies))
 	for _, l := range r.lobbies {
 		if l.Game == game {
 			out = append(out, l)
@@ -49,30 +45,24 @@ func (r *Registry) List(game GameType) []*Lobby {
 	return out
 }
 
-func (r *Registry) Remove(id int) {
+func (r *Registry) Remove(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.lobbies, id)
 }
 
-func (r *Registry) IncrPlayerCount(id int) {
+func (r *Registry) IncrPlayerCount(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if l, ok := r.lobbies[id]; ok {
-		l.PlayerCount++
-		l.State = LobbyStatePlaying
+		l.Players++
 	}
 }
 
-func (r *Registry) DecrPlayerCount(id int) {
+func (r *Registry) DecrPlayerCount(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if l, ok := r.lobbies[id]; ok {
-		if l.PlayerCount > 0 {
-			l.PlayerCount--
-		}
-		if l.PlayerCount == 0 {
-			l.State = LobbyStateWaiting
-		}
+	if l, ok := r.lobbies[id]; ok && l.Players > 0 {
+		l.Players--
 	}
 }
