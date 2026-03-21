@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -16,29 +17,31 @@ const (
 	cellHead  = "▓▓"
 	cellApple = "()"
 
-	colorReset     = "\x1b[0m"
-	colorBorder    = "\x1b[38;5;28m"
-	colorInk       = "\x1b[38;5;22m"
-	colorTitle     = "\x1b[1;38;5;22m"
-	colorMuted     = "\x1b[38;5;28m"
-	colorApple     = "\x1b[38;5;52m"
-	colorPanelBg   = "\x1b[48;5;120m"
-	colorArenaBg   = "\x1b[48;5;119m"
-	colorOverlay   = "\x1b[1;38;5;22m"
-	colorOverlayBg = "\x1b[48;5;150m"
-	colorAlive     = "\x1b[1;38;5;22m"
-	colorDead      = "\x1b[1;38;5;88m"
+	colorReset   = "\x1b[0m"
+	colorBorder  = "\x1b[38;5;28m"
+	colorInk     = "\x1b[38;5;250m"
+	colorTitle   = "\x1b[1;38;5;120m"
+	colorMuted   = "\x1b[38;5;108m"
+	colorApple   = "\x1b[38;5;216m"
+	colorOverlay = "\x1b[1;38;5;15m"
+	colorDead    = "\x1b[1;38;5;203m"
 )
 
-var snakePalette = []string{
-	"\x1b[38;5;22m",
-	"\x1b[38;5;28m",
-	"\x1b[38;5;58m",
-	"\x1b[38;5;94m",
-	"\x1b[38;5;64m",
+type palettePair struct {
+	Bright string
+	Pale   string
 }
 
-func renderFrame(state *GameState, dead map[string]bool, order []string, overlayNick string) []byte {
+var snakePalette = []palettePair{
+	{Bright: "\x1b[1;38;5;51m", Pale: "\x1b[38;5;117m"},
+	{Bright: "\x1b[1;38;5;226m", Pale: "\x1b[38;5;229m"},
+	{Bright: "\x1b[1;38;5;46m", Pale: "\x1b[38;5;120m"},
+	{Bright: "\x1b[1;38;5;213m", Pale: "\x1b[38;5;182m"},
+	{Bright: "\x1b[1;38;5;208m", Pale: "\x1b[38;5;215m"},
+	{Bright: "\x1b[1;38;5;39m", Pale: "\x1b[38;5;110m"},
+}
+
+func renderFrame(state *GameState, dead map[string]bool, order []string, colors map[string]int, viewerNick, overlayNick string) []byte {
 	var buf bytes.Buffer
 	fieldWidth := Width * cellWidth
 	overlay := deathOverlayLines(overlayNick)
@@ -47,7 +50,7 @@ func renderFrame(state *GameState, dead map[string]bool, order []string, overlay
 		overlayWidth = len([]rune(overlay[0]))
 	}
 	overlayRow, overlayCol := overlayOrigin(fieldWidth, len(overlay), overlayWidth)
-	panelLines := renderPanelLines(state, dead, order, overlayNick)
+	panelLines := renderPanelLines(state, dead, order, colors, viewerNick)
 
 	buf.WriteString("\x1b[H")
 	buf.WriteString(colorTitle)
@@ -81,7 +84,7 @@ func renderFrame(state *GameState, dead map[string]bool, order []string, overlay
 		if y >= overlayRow && y < overlayRow+len(overlay) {
 			overlayLine = overlay[y-overlayRow]
 		}
-		buf.WriteString(renderArenaRow(state, dead, y, overlayLine, overlayCol))
+		buf.WriteString(renderArenaRow(state, dead, colors, viewerNick, y, overlayLine, overlayCol))
 
 		buf.WriteString(colorBorder)
 		buf.WriteString("║  ║")
@@ -103,7 +106,7 @@ func renderFrame(state *GameState, dead map[string]bool, order []string, overlay
 	buf.WriteString("\r\n")
 
 	buf.WriteString(colorMuted)
-	buf.WriteString("  ←↑↓→ / WASD")
+	buf.WriteString("  ←↑↓→ / WASD / ЦФЫВ")
 	buf.WriteString(colorInk)
 	buf.WriteString(" move  ")
 	buf.WriteString(colorMuted)
@@ -133,7 +136,7 @@ func renderFrame(state *GameState, dead map[string]bool, order []string, overlay
 	return buf.Bytes()
 }
 
-func renderArenaRow(state *GameState, dead map[string]bool, y int, overlayLine string, overlayCol int) string {
+func renderArenaRow(state *GameState, dead map[string]bool, colors map[string]int, viewerNick string, y int, overlayLine string, overlayCol int) string {
 	var buf bytes.Buffer
 	overlayStart := -1
 	overlayCells := 0
@@ -144,44 +147,44 @@ func renderArenaRow(state *GameState, dead map[string]bool, y int, overlayLine s
 
 	for x := 0; x < Width; {
 		if overlayStart >= 0 && x == overlayStart {
-			buf.WriteString(colorOverlayBg + colorOverlay + overlayLine + colorReset)
+			buf.WriteString(colorOverlay + overlayLine + colorReset)
 			x += overlayCells
 			continue
 		}
-		buf.WriteString(cellAt(state, dead, x, y))
+		buf.WriteString(cellAt(state, dead, colors, viewerNick, x, y))
 		x++
 	}
 	return buf.String()
 }
 
-func cellAt(state *GameState, dead map[string]bool, x, y int) string {
+func cellAt(state *GameState, dead map[string]bool, colors map[string]int, viewerNick string, x, y int) string {
 	pt := Point{x, y}
 
 	for nick, s := range state.Snakes {
 		if dead[nick] || len(s.Body) == 0 {
 			continue
 		}
-		color := snakeColor(nick)
+		color := snakeColor(colors, nick, viewerNick)
 		if s.Body[0].Equal(pt) {
-			return colorArenaBg + color + cellHead + colorReset
+			return color + cellHead + colorReset
 		}
 		for _, b := range s.Body[1:] {
 			if b.Equal(pt) {
-				return colorArenaBg + color + cellBody + colorReset
+				return color + cellBody + colorReset
 			}
 		}
 	}
 
 	for _, a := range state.Apples {
 		if a.Equal(pt) {
-			return colorArenaBg + colorApple + cellApple + colorReset
+			return colorApple + cellApple + colorReset
 		}
 	}
 
-	return colorArenaBg + cellEmpty + colorReset
+	return cellEmpty
 }
 
-func renderPanelLines(state *GameState, dead map[string]bool, order []string, overlayNick string) []string {
+func renderPanelLines(state *GameState, dead map[string]bool, order []string, colors map[string]int, viewerNick string) []string {
 	type entry struct {
 		nick  string
 		score int
@@ -215,7 +218,7 @@ func renderPanelLines(state *GameState, dead map[string]bool, order []string, ov
 		return entries[i].nick < entries[j].nick
 	})
 
-	focusNick := overlayNick
+	focusNick := viewerNick
 	if focusNick == "" && len(order) > 0 {
 		focusNick = order[0]
 	}
@@ -236,7 +239,7 @@ func renderPanelLines(state *GameState, dead map[string]bool, order []string, ov
 		panelKV("MODE", "ARCADE"),
 		panelKV("SCORE", fmt.Sprintf("%02d", focusScore)),
 		panelKV("LENGTH", fmt.Sprintf("%02d", focusLen)),
-		panelKV("PLAYERS", fmt.Sprintf("%02d", len(entries))),
+		panelKV("PLAYERS", fmt.Sprintf("%02d/06", len(entries))),
 		panelBlank(),
 		panelKV("YOU", fallbackNick(focusNick)),
 		panelKV("STATE", focusState),
@@ -248,12 +251,11 @@ func renderPanelLines(state *GameState, dead map[string]bool, order []string, ov
 		lines = append(lines, panelText("waiting for players"))
 	} else {
 		for i, e := range entries {
-			status := "OK"
+			status := colorInk + "OK" + colorReset
 			if e.dead {
-				status = "KO"
+				status = colorDead + "KO" + colorReset
 			}
-			label := fmt.Sprintf("%d %s %-9s %2d %s", i+1, nickHead(e.nick), trimRunes(e.nick, 9), e.score, status)
-			lines = append(lines, panelText(label))
+			lines = append(lines, rankingLine(i+1, e.nick, e.score, status, snakeColor(colors, e.nick, viewerNick)))
 		}
 	}
 
@@ -262,7 +264,7 @@ func renderPanelLines(state *GameState, dead map[string]bool, order []string, ov
 	}
 	lines = append(lines,
 		panelLabel("CONTROLS"),
-		panelText("WASD / arrows"),
+		panelText("WASD / arrows / ЦФЫВ"),
 		panelText("C respawn  Q quit"),
 	)
 
@@ -271,9 +273,9 @@ func renderPanelLines(state *GameState, dead map[string]bool, order []string, ov
 
 func renderPanelLine(lines []string, idx int) string {
 	if idx >= 0 && idx < len(lines) {
-		return colorPanelBg + colorInk + padPanel(lines[idx]) + colorReset
+		return padANSI(lines[idx], panelWidth)
 	}
-	return colorPanelBg + strings.Repeat(" ", panelWidth) + colorReset
+	return strings.Repeat(" ", panelWidth)
 }
 
 func panelKV(key, value string) string {
@@ -289,16 +291,18 @@ func panelText(text string) string {
 	return " " + trimRunes(text, panelWidth-2)
 }
 
-func panelBlank() string {
-	return ""
+func rankingLine(rank int, nick string, score int, status string, nickColor string) string {
+	head := nickHead(nick)
+	plainNick := trimRunes(nick, 8)
+	prefix := fmt.Sprintf(" %d %s ", rank, head)
+	nickPart := nickColor + fmt.Sprintf("%-8s", plainNick) + colorReset
+	scorePart := fmt.Sprintf(" %2d ", score)
+	line := prefix + nickPart + scorePart + status
+	return padANSI(line, panelWidth)
 }
 
-func padPanel(s string) string {
-	runes := []rune(s)
-	if len(runes) >= panelWidth {
-		return string(runes[:panelWidth])
-	}
-	return s + strings.Repeat(" ", panelWidth-len(runes))
+func panelBlank() string {
+	return ""
 }
 
 func fallbackNick(nick string) string {
@@ -339,18 +343,6 @@ func overlayOrigin(fieldWidth, overlayHeight, overlayWidth int) (int, int) {
 	return row, col
 }
 
-func headCell(nick string) string {
-	head := nickHead(nick)
-	runes := []rune(head)
-	if len(runes) == 0 {
-		return cellHead
-	}
-	if len(runes) == 1 {
-		return string(runes[0]) + "█"
-	}
-	return string(runes[:2])
-}
-
 func nickHead(nick string) string {
 	runes := []rune(strings.ToUpper(strings.TrimSpace(nick)))
 	if len(runes) == 0 {
@@ -363,19 +355,23 @@ func nickHead(nick string) string {
 	return string(r)
 }
 
-func snakeColor(nick string) string {
-	sum := 0
-	for _, r := range nick {
-		sum += int(r)
+func snakeColor(colors map[string]int, nick, viewerNick string) string {
+	idx, ok := colors[nick]
+	if !ok || idx < 0 || idx >= len(snakePalette) {
+		idx = 0
 	}
-	return snakePalette[sum%len(snakePalette)]
+	pair := snakePalette[idx]
+	if nick == viewerNick {
+		return pair.Bright
+	}
+	return pair.Pale
 }
 
 func scoreFor(state *GameState, nick string, s *Snake) int {
 	if score, ok := state.Scores[nick]; ok {
 		return score
 	}
-	return s.Len() - 2
+	return max(0, s.Len()-2)
 }
 
 func trimRunes(s string, max int) string {
@@ -384,6 +380,61 @@ func trimRunes(s string, max int) string {
 		return s
 	}
 	return string(runes[:max])
+}
+
+func padANSI(s string, width int) string {
+	visible := visibleRuneCount(s)
+	if visible >= width {
+		return truncateANSI(s, width)
+	}
+	return s + strings.Repeat(" ", width-visible)
+}
+
+func truncateANSI(s string, width int) string {
+	var out strings.Builder
+	visible := 0
+	for i := 0; i < len(s) && visible < width; {
+		if s[i] == 0x1b {
+			j := i + 1
+			for j < len(s) && s[j] != 'm' {
+				j++
+			}
+			if j < len(s) {
+				j++
+			}
+			out.WriteString(s[i:j])
+			i = j
+			continue
+		}
+		r := []rune(s[i:])[0]
+		rLen := len(string(r))
+		out.WriteRune(r)
+		visible++
+		i += rLen
+	}
+	out.WriteString(colorReset)
+	return out.String()
+}
+
+func visibleRuneCount(s string) int {
+	count := 0
+	for i := 0; i < len(s); {
+		if s[i] == 0x1b {
+			j := i + 1
+			for j < len(s) && s[j] != 'm' {
+				j++
+			}
+			if j < len(s) {
+				j++
+			}
+			i = j
+			continue
+		}
+		_, size := utf8.DecodeRuneInString(s[i:])
+		count++
+		i += size
+	}
+	return count
 }
 
 func max(a, b int) int {

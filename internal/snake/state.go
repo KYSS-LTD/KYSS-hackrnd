@@ -20,14 +20,13 @@ func (gs *GameState) addPlayer(nick string) {
 		NextDir: DirRight,
 	}
 	gs.Snakes[nick] = snake
-	if _, ok := gs.Scores[nick]; !ok {
-		gs.Scores[nick] = 0
-	}
+	gs.Scores[nick] = 0
 	gs.rebalanceApples()
 }
 
 func (gs *GameState) removePlayer(nick string) {
 	delete(gs.Snakes, nick)
+	delete(gs.Scores, nick)
 	gs.rebalanceApples()
 }
 
@@ -59,7 +58,7 @@ func (gs *GameState) isFreeAt(p Point) bool {
 }
 
 func (gs *GameState) rebalanceApples() {
-	target := len(gs.Snakes)
+	target := len(gs.aliveSnakes())
 	if target < 1 {
 		target = 1
 	}
@@ -69,6 +68,16 @@ func (gs *GameState) rebalanceApples() {
 	for len(gs.Apples) > target {
 		gs.Apples = gs.Apples[:len(gs.Apples)-1]
 	}
+}
+
+func (gs *GameState) aliveSnakes() map[string]*Snake {
+	alive := make(map[string]*Snake, len(gs.Snakes))
+	for nick, snake := range gs.Snakes {
+		if snake.Len() > 0 {
+			alive[nick] = snake
+		}
+	}
+	return alive
 }
 
 func (gs *GameState) spawnApple() {
@@ -99,9 +108,10 @@ func (gs *GameState) spawnApple() {
 
 func (gs *GameState) tick() map[string]bool {
 	dead := make(map[string]bool)
+	alive := gs.aliveSnakes()
 
-	newHeads := make(map[string]Point)
-	for nick, s := range gs.Snakes {
+	newHeads := make(map[string]Point, len(alive))
+	for nick, s := range alive {
 		dir := s.NextDir
 		if dir.Equal(opposite(s.Dir)) {
 			dir = s.Dir
@@ -121,12 +131,12 @@ func (gs *GameState) tick() map[string]bool {
 		if dead[nick] {
 			continue
 		}
-		s := gs.Snakes[nick]
+		s := alive[nick]
 		if s.OccupiesExcludeHead(head) {
 			dead[nick] = true
 			continue
 		}
-		for otherNick, other := range gs.Snakes {
+		for otherNick, other := range alive {
 			if otherNick == nick {
 				continue
 			}
@@ -141,7 +151,7 @@ func (gs *GameState) tick() map[string]bool {
 		if dead[nick] {
 			continue
 		}
-		s := gs.Snakes[nick]
+		s := alive[nick]
 		s.Body = append([]Point{head}, s.Body...)
 		ateApple := false
 		for i, a := range gs.Apples {
@@ -159,6 +169,13 @@ func (gs *GameState) tick() map[string]bool {
 			} else {
 				s.Body = s.Body[:len(s.Body)-1]
 			}
+		}
+	}
+
+	for nick := range dead {
+		if s := gs.Snakes[nick]; s != nil {
+			s.Body = nil
+			s.Growing = 0
 		}
 	}
 

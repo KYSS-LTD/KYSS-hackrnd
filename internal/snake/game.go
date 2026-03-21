@@ -1,21 +1,27 @@
 package snake
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
 
-const tickRate = 150 * time.Millisecond
+const (
+	tickRate        = 150 * time.Millisecond
+	maxSnakePlayers = 6
+)
 
 type Game struct {
-	mu          sync.RWMutex
-	state       *GameState
-	players     map[string]*Player
-	nickOrder   []string
-	deadPlayers map[string]bool
-	inputCh     chan inputEvent
-	joinCh      chan joinEvent
-	leaveCh     chan string
+	mu           sync.RWMutex
+	state        *GameState
+	players      map[string]*Player
+	nickOrder    []string
+	deadPlayers  map[string]bool
+	playerColors map[string]int
+	freeColors   []int
+	inputCh      chan inputEvent
+	joinCh       chan joinEvent
+	leaveCh      chan string
 }
 
 type inputEvent struct {
@@ -26,23 +32,28 @@ type inputEvent struct {
 type joinEvent struct {
 	nick   string
 	player *Player
+	reply  chan error
 }
 
 func NewGame() *Game {
 	g := &Game{
-		state:       newGameState(),
-		players:     make(map[string]*Player),
-		deadPlayers: make(map[string]bool),
-		inputCh:     make(chan inputEvent, 64),
-		joinCh:      make(chan joinEvent, 8),
-		leaveCh:     make(chan string, 8),
+		state:        newGameState(),
+		players:      make(map[string]*Player),
+		deadPlayers:  make(map[string]bool),
+		playerColors: make(map[string]int),
+		freeColors:   []int{0, 1, 2, 3, 4, 5},
+		inputCh:      make(chan inputEvent, 64),
+		joinCh:       make(chan joinEvent, 8),
+		leaveCh:      make(chan string, 8),
 	}
 	go g.loop()
 	return g
 }
 
-func (g *Game) Join(nick string, p *Player) {
-	g.joinCh <- joinEvent{nick: nick, player: p}
+func (g *Game) Join(nick string, p *Player) error {
+	reply := make(chan error, 1)
+	g.joinCh <- joinEvent{nick: nick, player: p, reply: reply}
+	return <-reply
 }
 
 func (g *Game) Leave(nick string) {
@@ -64,11 +75,9 @@ func (g *Game) loop() {
 		select {
 		case ev := <-g.joinCh:
 			g.mu.Lock()
-			g.players[ev.nick] = ev.player
-			g.state.addPlayer(ev.nick)
-			g.nickOrder = append(g.nickOrder, ev.nick)
-			g.deadPlayers[ev.nick] = false
+			err := g.handleJoin(ev)
 			g.mu.Unlock()
+			ev.reply <- err
 
 		case nick := <-g.leaveCh:
 			g.mu.Lock()
@@ -78,6 +87,10 @@ func (g *Game) loop() {
 			delete(g.players, nick)
 			g.state.removePlayer(nick)
 			delete(g.deadPlayers, nick)
+			if colorIdx, ok := g.playerColors[nick]; ok {
+				delete(g.playerColors, nick)
+				g.releaseColor(colorIdx)
+			}
 			newOrder := g.nickOrder[:0]
 			for _, n := range g.nickOrder {
 				if n != nick {
@@ -100,6 +113,26 @@ func (g *Game) loop() {
 	}
 }
 
+func (g *Game) handleJoin(ev joinEvent) error {
+	if _, exists := g.players[ev.nick]; exists {
+		return fmt.Errorf("nick %q is already online", ev.nick)
+	}
+	if len(g.players) >= maxSnakePlayers {
+		return fmt.Errorf("lobby is full")
+	}
+	colorIdx, ok := g.claimColor()
+	if !ok {
+		return fmt.Errorf("no color slots available")
+	}
+
+	g.players[ev.nick] = ev.player
+	g.playerColors[ev.nick] = colorIdx
+	g.state.addPlayer(ev.nick)
+	g.nickOrder = append(g.nickOrder, ev.nick)
+	g.deadPlayers[ev.nick] = false
+	return nil
+}
+
 func (g *Game) handleInput(nick, key string) {
 	s, ok := g.state.Snakes[nick]
 	if !ok {
@@ -107,26 +140,26 @@ func (g *Game) handleInput(nick, key string) {
 	}
 
 	if g.deadPlayers[nick] {
-		if key == "c" || key == "C" {
+		if key == "c" || key == "C" || key == "с" || key == "С" {
 			g.respawn(nick)
 		}
 		return
 	}
 
 	switch key {
-	case "up", "w", "W":
+	case "up", "w", "W", "ц", "Ц":
 		if !s.Dir.Equal(DirDown) {
 			s.NextDir = DirUp
 		}
-	case "down", "s", "S":
+	case "down", "s", "S", "ы", "Ы":
 		if !s.Dir.Equal(DirUp) {
 			s.NextDir = DirDown
 		}
-	case "left", "a", "A":
+	case "left", "a", "A", "ф", "Ф":
 		if !s.Dir.Equal(DirRight) {
 			s.NextDir = DirLeft
 		}
-	case "right", "d", "D":
+	case "right", "d", "D", "в", "В":
 		if !s.Dir.Equal(DirLeft) {
 			s.NextDir = DirRight
 		}
@@ -143,6 +176,7 @@ func (g *Game) respawn(nick string) {
 	s.Dir = DirRight
 	s.NextDir = DirRight
 	s.Growing = 0
+	g.state.Scores[nick] = 0
 	g.deadPlayers[nick] = false
 }
 
@@ -154,6 +188,7 @@ func (g *Game) doTick() {
 	dead := g.state.tick()
 	for nick := range dead {
 		g.deadPlayers[nick] = true
+		g.state.Scores[nick] = 0
 	}
 
 	stateCopy := g.state.clone()
@@ -163,12 +198,41 @@ func (g *Game) doTick() {
 	}
 	orderCopy := make([]string, len(g.nickOrder))
 	copy(orderCopy, g.nickOrder)
+	colorsCopy := make(map[string]int, len(g.playerColors))
+	for nick, idx := range g.playerColors {
+		colorsCopy[nick] = idx
+	}
 
 	for nick, player := range g.players {
 		overlayNick := ""
 		if deadCopy[nick] {
 			overlayNick = nick
 		}
-		player.enqueue(renderFrame(stateCopy, deadCopy, orderCopy, overlayNick))
+		player.enqueue(renderFrame(stateCopy, deadCopy, orderCopy, colorsCopy, nick, overlayNick))
+	}
+}
+
+func (g *Game) claimColor() (int, bool) {
+	if len(g.freeColors) == 0 {
+		return 0, false
+	}
+	idx := g.freeColors[0]
+	g.freeColors = g.freeColors[1:]
+	return idx, true
+}
+
+func (g *Game) releaseColor(idx int) {
+	for _, existing := range g.freeColors {
+		if existing == idx {
+			return
+		}
+	}
+	g.freeColors = append(g.freeColors, idx)
+	for i := 1; i < len(g.freeColors); i++ {
+		j := i
+		for j > 0 && g.freeColors[j-1] > g.freeColors[j] {
+			g.freeColors[j-1], g.freeColors[j] = g.freeColors[j], g.freeColors[j-1]
+			j--
+		}
 	}
 }

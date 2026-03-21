@@ -6,11 +6,12 @@ import (
 )
 
 type Player struct {
-	Nick   string
-	output io.Writer
-	send   chan []byte
-	dead   bool
-	mu     sync.Mutex
+	Nick      string
+	output    io.Writer
+	send      chan []byte
+	dead      bool
+	mu        sync.Mutex
+	closeOnce sync.Once
 }
 
 func newPlayer(nick string, output io.Writer) *Player {
@@ -37,7 +38,9 @@ func (p *Player) enqueue(data []byte) {
 }
 
 func (p *Player) close() {
-	close(p.send)
+	p.closeOnce.Do(func() {
+		close(p.send)
+	})
 }
 
 func (p *Player) isDead() bool {
