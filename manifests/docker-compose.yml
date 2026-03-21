@@ -1,9 +1,6 @@
-version: "3.9"
-
 networks:
   games-net:
-    driver: bridge
-    name: games-net
+    external: true
 
 volumes:
   hub-data:
