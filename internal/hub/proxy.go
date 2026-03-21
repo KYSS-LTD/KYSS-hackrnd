@@ -58,6 +58,17 @@ func (p *proxy) connect(sess gossh.Session, nick string, pty gossh.Pty, winCh <-
 	}
 	defer gameSession.Close()
 
+	stdin, err := gameSession.StdinPipe()
+	if err != nil {
+		log.Printf("stdin pipe: %v", err)
+		return
+	}
+	stdout, err := gameSession.StdoutPipe()
+	if err != nil {
+		log.Printf("stdout pipe: %v", err)
+		return
+	}
+
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          0,
 		ssh.TTY_OP_ISPEED: 14400,
@@ -79,17 +90,6 @@ func (p *proxy) connect(sess gossh.Session, nick string, pty gossh.Pty, winCh <-
 
 	p.manager.IncrementPlayers(p.lobbyID, 1)
 	defer p.manager.IncrementPlayers(p.lobbyID, -1)
-
-	stdin, err := gameSession.StdinPipe()
-	if err != nil {
-		log.Printf("stdin pipe: %v", err)
-		return
-	}
-	stdout, err := gameSession.StdoutPipe()
-	if err != nil {
-		log.Printf("stdout pipe: %v", err)
-		return
-	}
 
 	done := make(chan struct{}, 2)
 
