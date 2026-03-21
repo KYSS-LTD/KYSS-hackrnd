@@ -47,12 +47,16 @@ func (m *menu) run() {
 	}()
 
 	for {
-		game := m.selectGame()
-		if game == "" {
-			return
+		game := lobby.GameSnake
+		if len(availableGames()) > 1 {
+			selected := m.selectGame()
+			if selected == "" {
+				return
+			}
+			game = lobby.GameType(selected)
 		}
 
-		action := m.selectLobby(lobby.GameType(game))
+		action := m.selectLobby(game)
 		if action == "back" {
 			continue
 		}
@@ -90,13 +94,7 @@ func (m *menu) drawHeader() {
 }
 
 func (m *menu) selectGame() string {
-	games := []struct {
-		id   string
-		name string
-		desc string
-	}{
-		{"snake", "SNAKE", "классическая змейка, до 8 игроков"},
-	}
+	games := availableGames()
 
 	cursor := 0
 
@@ -142,6 +140,20 @@ func (m *menu) selectGame() string {
 		case "q", "Q":
 			return ""
 		}
+	}
+}
+
+func availableGames() []struct {
+	id   string
+	name string
+	desc string
+} {
+	return []struct {
+		id   string
+		name string
+		desc string
+	}{
+		{"snake", "SNAKE", "классическая змейка, до 8 игроков"},
 	}
 }
 
