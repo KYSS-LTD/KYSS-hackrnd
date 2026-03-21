@@ -22,6 +22,7 @@ type Manager struct {
 	docker        *dockerclient.Client
 	snakeImage    string
 	pingPongImage string
+	tanchikiImage string
 	finalImage    string
 	dockerNet     string
 	nextID        int
@@ -71,6 +72,10 @@ func NewManager() (*Manager, error) {
 	if finalImage == "" {
 		finalImage = "ssh-games-finalsentence:latest"
 	}
+	tanchikiImage := os.Getenv("TANCHIKI_IMAGE")
+	if tanchikiImage == "" {
+		tanchikiImage = "ssh-games-tanchiki:latest"
+	}
 	dockerNet := os.Getenv("DOCKER_NETWORK")
 	if dockerNet == "" {
 		dockerNet = "games-net"
@@ -81,6 +86,7 @@ func NewManager() (*Manager, error) {
 		docker:        cli,
 		snakeImage:    snakeImage,
 		pingPongImage: pingPongImage,
+		tanchikiImage: tanchikiImage,
 		finalImage:    finalImage,
 		dockerNet:     dockerNet,
 	}
@@ -103,6 +109,8 @@ func (m *Manager) CreateLobby(game GameType) (*Lobby, error) {
 		image = m.pingPongImage
 	case GameFinalSentence:
 		image = m.finalImage
+	case GameTanchiki:
+		image = m.tanchikiImage
 	default:
 		return nil, fmt.Errorf("unknown game: %s", game)
 	}
@@ -281,6 +289,8 @@ func maxPlayersForGame(game GameType) int {
 	case GameSnake:
 		return 6
 	case GameFinalSentence:
+		return 6
+	case GameTanchiki:
 		return 6
 	default:
 		return 8

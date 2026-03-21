@@ -167,6 +167,7 @@ func availableGames() []gameOption {
 	return []gameOption{
 		{"snake", "SNAKE", "классическая змейка, до 6 игроков"},
 		{"pingpong", "PING PONG", "дуэль на ракетках, 1v1 или против бота"},
+		{"tanchiki", "TANCHIKI", "танковая аркада, 2-6 игроков, бочки и стены"},
 		{"finalsentence", "FINAL SENTENCE", "гонка печати на 1 минуту, соло или мультиплеер"},
 	}
 }

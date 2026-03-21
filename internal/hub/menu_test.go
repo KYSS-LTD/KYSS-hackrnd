@@ -14,19 +14,23 @@ import (
 	cryptossh "golang.org/x/crypto/ssh"
 )
 
-func TestAvailableGamesIncludesPingPongAndFinalSentence(t *testing.T) {
+func TestAvailableGamesIncludesMainModes(t *testing.T) {
 	games := availableGames()
 	foundPingPong := false
 	foundFinalSentence := false
+	foundTanchiki := false
 	for _, game := range games {
 		if game.id == "pingpong" {
 			foundPingPong = true
+		}
+		if game.id == "tanchiki" {
+			foundTanchiki = true
 		}
 		if game.id == "finalsentence" {
 			foundFinalSentence = true
 		}
 	}
-	if !foundPingPong || !foundFinalSentence {
+	if !foundPingPong || !foundFinalSentence || !foundTanchiki {
 		t.Fatalf("availableGames() missing entries: %#v", games)
 	}
 }
