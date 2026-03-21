@@ -8,32 +8,34 @@ import (
 )
 
 const (
-	cellWidth = 2
+	cellWidth  = 2
+	panelWidth = 28
 
-	cellEmpty = "· "
+	cellEmpty = "  "
 	cellBody  = "██"
-	cellApple = "◉◉"
+	cellHead  = "▓▓"
+	cellApple = "()"
 
 	colorReset     = "\x1b[0m"
-	colorBorder    = "\x1b[38;5;45m"
-	colorApple     = "\x1b[38;5;226m"
-	colorTitle     = "\x1b[1;38;5;51m"
-	colorSubtitle  = "\x1b[38;5;117m"
-	colorMuted     = "\x1b[38;5;245m"
-	colorDead      = "\x1b[38;5;203m"
-	colorOverlay   = "\x1b[1;38;5;198m"
-	colorOverlayBg = "\x1b[48;5;53m"
+	colorBorder    = "\x1b[38;5;28m"
+	colorInk       = "\x1b[38;5;22m"
+	colorTitle     = "\x1b[1;38;5;22m"
+	colorMuted     = "\x1b[38;5;28m"
+	colorApple     = "\x1b[38;5;52m"
+	colorPanelBg   = "\x1b[48;5;120m"
+	colorArenaBg   = "\x1b[48;5;119m"
+	colorOverlay   = "\x1b[1;38;5;22m"
+	colorOverlayBg = "\x1b[48;5;150m"
+	colorAlive     = "\x1b[1;38;5;22m"
+	colorDead      = "\x1b[1;38;5;88m"
 )
 
 var snakePalette = []string{
-	"\x1b[38;5;81m",
-	"\x1b[38;5;118m",
-	"\x1b[38;5;213m",
-	"\x1b[38;5;208m",
-	"\x1b[38;5;159m",
-	"\x1b[38;5;154m",
-	"\x1b[38;5;220m",
-	"\x1b[38;5;141m",
+	"\x1b[38;5;22m",
+	"\x1b[38;5;28m",
+	"\x1b[38;5;58m",
+	"\x1b[38;5;94m",
+	"\x1b[38;5;64m",
 }
 
 func renderFrame(state *GameState, dead map[string]bool, order []string, overlayNick string) []byte {
@@ -45,25 +47,27 @@ func renderFrame(state *GameState, dead map[string]bool, order []string, overlay
 		overlayWidth = len([]rune(overlay[0]))
 	}
 	overlayRow, overlayCol := overlayOrigin(fieldWidth, len(overlay), overlayWidth)
+	panelLines := renderPanelLines(state, dead, order, overlayNick)
 
 	buf.WriteString("\x1b[H")
 	buf.WriteString(colorTitle)
-	buf.WriteString("  ╭─ SNAKE ARENA ─")
-	buf.WriteString(strings.Repeat("─", max(0, fieldWidth-15)))
-	buf.WriteString("╮\r\n")
+	buf.WriteString("  TERMINAL SNAKE")
 	buf.WriteString(colorMuted)
-	buf.WriteString("  │ ")
-	buf.WriteString(colorSubtitle)
-	buf.WriteString("лови ◉◉, расти и переживи остальных")
+	buf.WriteString(strings.Repeat(" ", max(2, fieldWidth-14)))
+	buf.WriteString(colorTitle)
+	buf.WriteString("OLD-SCHOOL ARENA")
+	buf.WriteString(colorReset)
+	buf.WriteString("\r\n")
 	buf.WriteString(colorMuted)
-	buf.WriteString(strings.Repeat(" ", max(0, fieldWidth-35)))
-	buf.WriteString("│\r\n")
+	buf.WriteString("  monochrome UI inspired by terminal-snake")
+	buf.WriteString(colorReset)
+	buf.WriteString("\r\n")
 
 	buf.WriteString(colorBorder)
 	buf.WriteString("  ╔")
-	for i := 0; i < fieldWidth; i++ {
-		buf.WriteString("═")
-	}
+	buf.WriteString(strings.Repeat("═", fieldWidth))
+	buf.WriteString("╗  ╔")
+	buf.WriteString(strings.Repeat("═", panelWidth))
 	buf.WriteString("╗")
 	buf.WriteString(colorReset)
 	buf.WriteString("\r\n")
@@ -80,6 +84,10 @@ func renderFrame(state *GameState, dead map[string]bool, order []string, overlay
 		buf.WriteString(renderArenaRow(state, dead, y, overlayLine, overlayCol))
 
 		buf.WriteString(colorBorder)
+		buf.WriteString("║  ║")
+		buf.WriteString(colorReset)
+		buf.WriteString(renderPanelLine(panelLines, y))
+		buf.WriteString(colorBorder)
 		buf.WriteString("║")
 		buf.WriteString(colorReset)
 		buf.WriteString("\r\n")
@@ -87,14 +95,40 @@ func renderFrame(state *GameState, dead map[string]bool, order []string, overlay
 
 	buf.WriteString(colorBorder)
 	buf.WriteString("  ╚")
-	for i := 0; i < fieldWidth; i++ {
-		buf.WriteString("═")
-	}
+	buf.WriteString(strings.Repeat("═", fieldWidth))
+	buf.WriteString("╝  ╚")
+	buf.WriteString(strings.Repeat("═", panelWidth))
 	buf.WriteString("╝")
 	buf.WriteString(colorReset)
 	buf.WriteString("\r\n")
 
-	renderLeaderboard(&buf, state, dead, order)
+	buf.WriteString(colorMuted)
+	buf.WriteString("  ←↑↓→ / WASD")
+	buf.WriteString(colorInk)
+	buf.WriteString(" move  ")
+	buf.WriteString(colorMuted)
+	buf.WriteString("C")
+	buf.WriteString(colorInk)
+	buf.WriteString(" respawn  ")
+	buf.WriteString(colorMuted)
+	buf.WriteString("Q")
+	buf.WriteString(colorInk)
+	buf.WriteString(" quit")
+	buf.WriteString(colorReset)
+	buf.WriteString("\r\n")
+	buf.WriteString(colorMuted)
+	buf.WriteString("  tip: eat pellets, avoid walls, and outlive the lobby")
+	buf.WriteString(colorReset)
+	buf.WriteString("\r\n")
+	buf.WriteString(colorBorder)
+	buf.WriteString("  ")
+	buf.WriteString(strings.Repeat("─", fieldWidth+panelWidth+8))
+	buf.WriteString(colorReset)
+	buf.WriteString("\r\n")
+	buf.WriteString(colorMuted)
+	buf.WriteString("  ready for another round")
+	buf.WriteString(colorReset)
+	buf.WriteString("\r\n")
 
 	return buf.Bytes()
 }
@@ -129,25 +163,25 @@ func cellAt(state *GameState, dead map[string]bool, x, y int) string {
 		}
 		color := snakeColor(nick)
 		if s.Body[0].Equal(pt) {
-			return color + headCell(nick) + colorReset
+			return colorArenaBg + color + cellHead + colorReset
 		}
 		for _, b := range s.Body[1:] {
 			if b.Equal(pt) {
-				return color + cellBody + colorReset
+				return colorArenaBg + color + cellBody + colorReset
 			}
 		}
 	}
 
 	for _, a := range state.Apples {
 		if a.Equal(pt) {
-			return colorApple + cellApple + colorReset
+			return colorArenaBg + colorApple + cellApple + colorReset
 		}
 	}
 
-	return colorMuted + cellEmpty + colorReset
+	return colorArenaBg + cellEmpty + colorReset
 }
 
-func renderLeaderboard(buf *bytes.Buffer, state *GameState, dead map[string]bool, order []string) {
+func renderPanelLines(state *GameState, dead map[string]bool, order []string, overlayNick string) []string {
 	type entry struct {
 		nick  string
 		score int
@@ -181,41 +215,98 @@ func renderLeaderboard(buf *bytes.Buffer, state *GameState, dead map[string]bool
 		return entries[i].nick < entries[j].nick
 	})
 
-	lineW := Width*cellWidth + 4
-	buf.WriteString(colorBorder + "  " + strings.Repeat("─", lineW) + colorReset + "\r\n")
-	buf.WriteString(colorTitle + "  ◇ PILOTS" + colorReset + "\r\n")
-
-	for i, e := range entries {
-		status := colorMuted + "ALIVE" + colorReset
-		if e.dead {
-			status = colorDead + "DEAD " + colorReset
+	focusNick := overlayNick
+	if focusNick == "" && len(order) > 0 {
+		focusNick = order[0]
+	}
+	focusSnake := state.Snakes[focusNick]
+	focusScore := 0
+	focusLen := 0
+	focusState := "SPECTATE"
+	if focusSnake != nil {
+		focusScore = scoreFor(state, focusNick, focusSnake)
+		focusLen = focusSnake.Len()
+		focusState = "ALIVE"
+		if dead[focusNick] {
+			focusState = "LOST"
 		}
-		nick := trimRunes(e.nick, 12)
-		line := fmt.Sprintf("  %d. %s%s %-12s%s  %s%2d%s  %s\r\n",
-			i+1,
-			snakeColor(e.nick),
-			nickHead(e.nick),
-			nick,
-			colorReset,
-			colorApple,
-			e.score,
-			colorReset,
-			status,
-		)
-		buf.WriteString(line)
+	}
+
+	lines := []string{
+		panelKV("MODE", "ARCADE"),
+		panelKV("SCORE", fmt.Sprintf("%02d", focusScore)),
+		panelKV("LENGTH", fmt.Sprintf("%02d", focusLen)),
+		panelKV("PLAYERS", fmt.Sprintf("%02d", len(entries))),
+		panelBlank(),
+		panelKV("YOU", fallbackNick(focusNick)),
+		panelKV("STATE", focusState),
+		panelBlank(),
+		panelLabel("RANKING"),
 	}
 
 	if len(entries) == 0 {
-		buf.WriteString(colorMuted + "  Никого на арене — заходи первым.\r\n" + colorReset)
+		lines = append(lines, panelText("waiting for players"))
+	} else {
+		for i, e := range entries {
+			status := "OK"
+			if e.dead {
+				status = "KO"
+			}
+			label := fmt.Sprintf("%d %s %-9s %2d %s", i+1, nickHead(e.nick), trimRunes(e.nick, 9), e.score, status)
+			lines = append(lines, panelText(label))
+		}
 	}
 
-	buf.WriteString(colorBorder + "  " + strings.Repeat("─", lineW) + colorReset + "\r\n")
-	buf.WriteString(colorSubtitle + "  WASD/стрелки" + colorReset)
-	buf.WriteString(colorMuted + " — движение   " + colorReset)
-	buf.WriteString(colorSubtitle + "C" + colorReset)
-	buf.WriteString(colorMuted + " — респавн   " + colorReset)
-	buf.WriteString(colorSubtitle + "Q" + colorReset)
-	buf.WriteString(colorMuted + " — выход\r\n" + colorReset)
+	for len(lines) < Height-3 {
+		lines = append(lines, panelBlank())
+	}
+	lines = append(lines,
+		panelLabel("CONTROLS"),
+		panelText("WASD / arrows"),
+		panelText("C respawn  Q quit"),
+	)
+
+	return lines
+}
+
+func renderPanelLine(lines []string, idx int) string {
+	if idx >= 0 && idx < len(lines) {
+		return colorPanelBg + colorInk + padPanel(lines[idx]) + colorReset
+	}
+	return colorPanelBg + strings.Repeat(" ", panelWidth) + colorReset
+}
+
+func panelKV(key, value string) string {
+	value = trimRunes(value, 12)
+	return fmt.Sprintf(" %-8s %16s ", key, value)
+}
+
+func panelLabel(label string) string {
+	return fmt.Sprintf(" [%s]%s", label, strings.Repeat("-", max(0, panelWidth-len([]rune(label))-4)))
+}
+
+func panelText(text string) string {
+	return " " + trimRunes(text, panelWidth-2)
+}
+
+func panelBlank() string {
+	return ""
+}
+
+func padPanel(s string) string {
+	runes := []rune(s)
+	if len(runes) >= panelWidth {
+		return string(runes[:panelWidth])
+	}
+	return s + strings.Repeat(" ", panelWidth-len(runes))
+}
+
+func fallbackNick(nick string) string {
+	nick = strings.TrimSpace(nick)
+	if nick == "" {
+		return "-"
+	}
+	return trimRunes(nick, 12)
 }
 
 func deathOverlayLines(nick string) []string {
@@ -252,7 +343,7 @@ func headCell(nick string) string {
 	head := nickHead(nick)
 	runes := []rune(head)
 	if len(runes) == 0 {
-		return "[]"
+		return cellHead
 	}
 	if len(runes) == 1 {
 		return string(runes[0]) + "█"
