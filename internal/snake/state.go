@@ -4,6 +4,15 @@ import (
 	"math/rand"
 )
 
+const minSpawnFreeAhead = 6
+
+var spawnDirections = []Point{DirUp, DirDown, DirLeft, DirRight}
+
+type spawnCandidate struct {
+	Head Point
+	Dir  Point
+}
+
 func newGameState() *GameState {
 	return &GameState{
 		Snakes: make(map[string]*Snake),
@@ -13,11 +22,11 @@ func newGameState() *GameState {
 }
 
 func (gs *GameState) addPlayer(nick string) {
-	pos := gs.freeSpawnPoint()
+	spawn := gs.freeSpawn()
 	snake := &Snake{
-		Body:    []Point{pos, {pos.X - 1, pos.Y}},
-		Dir:     DirRight,
-		NextDir: DirRight,
+		Body:    []Point{spawn.Head, gs.spawnTail(spawn.Head, spawn.Dir)},
+		Dir:     spawn.Dir,
+		NextDir: spawn.Dir,
 	}
 	gs.Snakes[nick] = snake
 	gs.Scores[nick] = 0
@@ -30,14 +39,53 @@ func (gs *GameState) removePlayer(nick string) {
 	gs.rebalanceApples()
 }
 
-func (gs *GameState) freeSpawnPoint() Point {
-	for attempts := 0; attempts < 200; attempts++ {
-		p := Point{rand.Intn(Width-4) + 2, rand.Intn(Height-2) + 1}
-		if gs.isFreeAt(p) && gs.isFreeAt(Point{p.X - 1, p.Y}) {
-			return p
+func (gs *GameState) freeSpawn() spawnCandidate {
+	candidates := gs.spawnCandidates()
+	if len(candidates) > 0 {
+		return candidates[rand.Intn(len(candidates))]
+	}
+
+	fallbackHead := Point{Width / 2, Height / 2}
+	return spawnCandidate{Head: fallbackHead, Dir: DirRight}
+}
+
+func (gs *GameState) spawnCandidates() []spawnCandidate {
+	candidates := make([]spawnCandidate, 0)
+	for y := 0; y < Height; y++ {
+		for x := 0; x < Width; x++ {
+			head := Point{X: x, Y: y}
+			for _, dir := range spawnDirections {
+				if gs.isValidSpawn(head, dir) {
+					candidates = append(candidates, spawnCandidate{Head: head, Dir: dir})
+				}
+			}
 		}
 	}
-	return Point{Width / 2, Height / 2}
+	return candidates
+}
+
+func (gs *GameState) isValidSpawn(head Point, dir Point) bool {
+	if !gs.isFreeAt(head) {
+		return false
+	}
+
+	tail := gs.spawnTail(head, dir)
+	if !gs.isFreeAt(tail) {
+		return false
+	}
+
+	for step := 1; step <= minSpawnFreeAhead; step++ {
+		ahead := Point{X: head.X + dir.X*step, Y: head.Y + dir.Y*step}
+		if !gs.isFreeAt(ahead) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (gs *GameState) spawnTail(head Point, dir Point) Point {
+	return Point{X: head.X - dir.X, Y: head.Y - dir.Y}
 }
 
 func (gs *GameState) isFreeAt(p Point) bool {
