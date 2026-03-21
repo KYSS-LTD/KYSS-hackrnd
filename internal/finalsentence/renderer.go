@@ -13,6 +13,7 @@ const (
 	colorWhite  = "\x1b[1;38;5;15m"
 	colorGreen  = "\x1b[1;38;5;84m"
 	colorRed    = "\x1b[1;38;5;203m"
+	colorBlue   = "\x1b[1;38;5;75m"
 	colorDim    = "\x1b[38;5;245m"
 	colorBorder = "\x1b[38;5;110m"
 	colorAccent = "\x1b[1;38;5;153m"
@@ -20,12 +21,14 @@ const (
 )
 
 type playerSnapshot struct {
-	Nick       string
-	LineIndex  int
-	Typed      []typedRune
-	Finished   bool
-	FinishedAt time.Time
-	Ratio      float64
+	Nick         string
+	LineIndex    int
+	Typed        []typedRune
+	Mistake      *mistakeState
+	InputBlocked bool
+	Finished     bool
+	FinishedAt   time.Time
+	Ratio        float64
 }
 
 type roundState struct {
@@ -59,7 +62,7 @@ func renderFrame(state roundState, viewerNick string) []byte {
 	buf.WriteString(renderStandings(state, viewerNick))
 	buf.WriteString("\r\n")
 	buf.WriteString(colorDim)
-	buf.WriteString("  Backspace — исправить символ. Q — выйти.\r\n")
+	buf.WriteString("  Ошибка блокирует ввод на 3 секунды, Backspace — удалить верный символ, Q — выйти.\r\n")
 	buf.WriteString("  ")
 	buf.WriteString(winnerLabel(state.Winners))
 	buf.WriteString(colorReset)
@@ -139,7 +142,7 @@ func renderTextPanel(state roundState, viewer playerSnapshot) string {
 			buf.WriteString(colorGreen)
 			buf.WriteString(padRight(line, 68))
 		case i == viewer.LineIndex && !viewer.Finished:
-			buf.WriteString(renderActiveLine(line, viewer.Typed, 68))
+			buf.WriteString(renderActiveLine(line, viewer, 68))
 		case i == viewer.LineIndex && viewer.Finished:
 			buf.WriteString(colorGreen)
 			buf.WriteString(padRight(line, 68))
@@ -155,23 +158,30 @@ func renderTextPanel(state roundState, viewer playerSnapshot) string {
 	return buf.String()
 }
 
-func renderActiveLine(line string, typed []typedRune, width int) string {
+func renderActiveLine(line string, viewer playerSnapshot, width int) string {
 	target := []rune(line)
 	var buf strings.Builder
 	for i, r := range target {
 		switch {
-		case i < len(typed):
-			if typed[i].correct {
-				buf.WriteString(colorGreen)
-			} else {
+		case i < len(viewer.Typed):
+			buf.WriteString(colorGreen)
+			buf.WriteRune(viewer.Typed[i].value)
+		case viewer.Mistake != nil && i == viewer.Mistake.index:
+			if viewer.InputBlocked {
 				buf.WriteString(colorRed)
+			} else {
+				buf.WriteString(colorBlue)
 			}
-			buf.WriteRune(typed[i].value)
-		case i == len(typed):
+			buf.WriteRune(viewer.Mistake.value)
+		case i == len(viewer.Typed) && !viewer.InputBlocked:
 			buf.WriteString(colorAccent)
 			buf.WriteRune(r)
 		default:
-			buf.WriteString(colorWhite)
+			if viewer.InputBlocked {
+				buf.WriteString(colorDim)
+			} else {
+				buf.WriteString(colorWhite)
+			}
 			buf.WriteRune(r)
 		}
 	}

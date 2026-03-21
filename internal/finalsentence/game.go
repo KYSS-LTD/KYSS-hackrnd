@@ -10,6 +10,7 @@ import (
 const (
 	roundDuration = 60 * time.Second
 	tickRate      = 100 * time.Millisecond
+	inputLockTime = 3 * time.Second
 )
 
 var roundTexts = [][]string{
@@ -33,11 +34,18 @@ type typedRune struct {
 	correct bool
 }
 
+type mistakeState struct {
+	value rune
+	index int
+}
+
 type playerProgress struct {
-	lineIndex  int
-	typed      []typedRune
-	finished   bool
-	finishedAt time.Time
+	lineIndex    int
+	typed        []typedRune
+	mistake      *mistakeState
+	blockedUntil time.Time
+	finished     bool
+	finishedAt   time.Time
 }
 
 type Game struct {
@@ -133,10 +141,14 @@ func (g *Game) handleInput(nick, key string, now time.Time) {
 	if key == "enter" || key == "up" || key == "down" || key == "left" || key == "right" {
 		return
 	}
+	if now.Before(prog.blockedUntil) {
+		return
+	}
 	if key == "backspace" {
 		if len(prog.typed) > 0 {
 			prog.typed = prog.typed[:len(prog.typed)-1]
 		}
+		prog.mistake = nil
 		return
 	}
 
@@ -150,7 +162,15 @@ func (g *Game) handleInput(nick, key string, now time.Time) {
 	}
 
 	idx := len(prog.typed)
-	prog.typed = append(prog.typed, typedRune{value: r[0], correct: target[idx] == r[0]})
+	if target[idx] != r[0] {
+		prog.mistake = &mistakeState{value: r[0], index: idx}
+		prog.blockedUntil = now.Add(inputLockTime)
+		return
+	}
+
+	prog.typed = append(prog.typed, typedRune{value: r[0], correct: true})
+	prog.mistake = nil
+	prog.blockedUntil = time.Time{}
 	if len(prog.typed) == len(target) {
 		if prog.lineIndex == len(g.currentLines())-1 {
 			prog.finished = true
@@ -158,6 +178,8 @@ func (g *Game) handleInput(nick, key string, now time.Time) {
 		} else {
 			prog.lineIndex++
 			prog.typed = nil
+			prog.mistake = nil
+			prog.blockedUntil = time.Time{}
 		}
 	}
 }
@@ -246,12 +268,14 @@ func (g *Game) snapshotLocked(now time.Time) roundState {
 			leaderRatio = ratio
 		}
 		players = append(players, playerSnapshot{
-			Nick:       nick,
-			LineIndex:  prog.lineIndex,
-			Typed:      append([]typedRune(nil), prog.typed...),
-			Finished:   prog.finished,
-			FinishedAt: prog.finishedAt,
-			Ratio:      ratio,
+			Nick:         nick,
+			LineIndex:    prog.lineIndex,
+			Typed:        append([]typedRune(nil), prog.typed...),
+			Mistake:      prog.mistake,
+			InputBlocked: now.Before(prog.blockedUntil),
+			Finished:     prog.finished,
+			FinishedAt:   prog.finishedAt,
+			Ratio:        ratio,
 		})
 	}
 	sort.SliceStable(players, func(i, j int) bool {
