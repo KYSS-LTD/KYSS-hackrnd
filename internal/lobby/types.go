@@ -7,6 +7,7 @@ type GameType string
 const (
 	GameSnake         GameType = "snake"
 	GamePingPong      GameType = "pingpong"
+	GameTanchiki      GameType = "tanchiki"
 	GameFinalSentence GameType = "finalsentence"
 )
 
