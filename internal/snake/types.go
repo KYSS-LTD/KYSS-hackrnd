@@ -25,10 +25,10 @@ func opposite(d Point) Point {
 }
 
 type Snake struct {
-	Body      []Point
-	Dir       Point
-	NextDir   Point
-	Growing   int
+	Body    []Point
+	Dir     Point
+	NextDir Point
+	Growing int
 }
 
 func (s *Snake) Head() Point {
@@ -57,4 +57,8 @@ type GameState struct {
 	Snakes map[string]*Snake
 	Apples []Point
 	Scores map[string]int
+}
+
+func (s *Snake) Len() int {
+	return len(s.Body)
 }

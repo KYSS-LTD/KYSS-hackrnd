@@ -47,7 +47,7 @@ func (gs *GameState) isFreeAt(p Point) bool {
 	}
 	for _, s := range gs.Snakes {
 		if s.Occupies(p) {
-			return true
+			return false
 		}
 	}
 	for _, a := range gs.Apples {
