@@ -25,11 +25,34 @@ type Manager struct {
 	nextID     int
 }
 
+func newDockerClient(ctx context.Context) (*dockerclient.Client, error) {
+	baseOpts := []dockerclient.Opt{
+		dockerclient.WithTLSClientConfigFromEnv(),
+		dockerclient.WithHostFromEnv(),
+	}
+
+	bootstrap, err := dockerclient.NewClientWithOpts(baseOpts...)
+	if err != nil {
+		return nil, err
+	}
+
+	ping, err := bootstrap.Ping(ctx)
+	if err != nil {
+		bootstrap.Close()
+		return nil, err
+	}
+	if ping.APIVersion == "" {
+		return bootstrap, nil
+	}
+	if err := bootstrap.Close(); err != nil {
+		return nil, err
+	}
+
+	return dockerclient.NewClientWithOpts(append(baseOpts, dockerclient.WithVersion(ping.APIVersion))...)
+}
+
 func NewManager() (*Manager, error) {
-	cli, err := dockerclient.NewClientWithOpts(
-		dockerclient.FromEnv,
-		dockerclient.WithAPIVersionNegotiation(),
-	)
+	cli, err := newDockerClient(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("docker client: %w", err)
 	}
