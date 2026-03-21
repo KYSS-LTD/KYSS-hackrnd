@@ -83,16 +83,22 @@ func (m *menu) clearAndDraw() {
 	m.write(tui.Home)
 }
 
+func renderHeader(width int, nick string) string {
+	innerWidth := max(0, width-2)
+	var b strings.Builder
+	b.WriteString(tui.FgGray)
+	b.WriteString(fmt.Sprintf("╔%s╗\r\n", strings.Repeat("═", innerWidth)))
+	title := tui.CenterPad("SSH GAMES", innerWidth)
+	b.WriteString(fmt.Sprintf("║%s%s%s%s║\r\n", tui.Bold+tui.FgWhite, title, tui.Reset+tui.FgGray, ""))
+	sub := tui.CenterPad(fmt.Sprintf("player: %s", nick), innerWidth)
+	b.WriteString(fmt.Sprintf("║%s%s%s║\r\n", tui.Dim, sub, tui.Reset+tui.FgGray))
+	b.WriteString(fmt.Sprintf("╚%s╝\r\n", strings.Repeat("═", innerWidth)))
+	b.WriteString(tui.Reset)
+	return b.String()
+}
+
 func (m *menu) drawHeader() {
-	m.write(tui.FgGray)
-	header := fmt.Sprintf("╔%s╗", strings.Repeat("═", m.w-2))
-	m.write(header + "\r\n")
-	title := tui.CenterPad("SSH GAMES", m.w-2)
-	m.write(fmt.Sprintf("║%s%s%s%s║\r\n", tui.Bold+tui.FgWhite, title, tui.Reset+tui.FgGray, ""))
-	sub := tui.CenterPad(fmt.Sprintf("player: %s", m.nick), m.w-2)
-	m.write(fmt.Sprintf("║%s%s%s║\r\n", tui.Dim, sub, tui.Reset+tui.FgGray))
-	m.write(fmt.Sprintf("╚%s╝\r\n", strings.Repeat("═", m.w-2)))
-	m.write(tui.Reset)
+	m.write(renderHeader(m.w, m.nick))
 }
 
 func (m *menu) selectGame(games []gameOption) string {

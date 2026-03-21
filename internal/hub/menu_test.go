@@ -1,6 +1,9 @@
 package hub
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestAvailableGamesIncludesPingPong(t *testing.T) {
 	games := availableGames()
@@ -13,5 +16,17 @@ func TestAvailableGamesIncludesPingPong(t *testing.T) {
 	}
 	if !foundPingPong {
 		t.Fatalf("availableGames() missing pingpong: %#v", games)
+	}
+}
+
+func TestRenderHeaderHandlesNarrowWidths(t *testing.T) {
+	for _, width := range []int{0, 1, 2} {
+		header := renderHeader(width, "player")
+		if !strings.Contains(header, "SSH GAMES") {
+			t.Fatalf("renderHeader(%d) missing title: %q", width, header)
+		}
+		if !strings.Contains(header, "player: player") {
+			t.Fatalf("renderHeader(%d) missing player line: %q", width, header)
+		}
 	}
 }
