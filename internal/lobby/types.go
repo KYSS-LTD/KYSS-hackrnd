@@ -7,6 +7,7 @@ type GameType string
 const (
 	GameSnake    GameType = "snake"
 	GamePingPong GameType = "pingpong"
+	GameKitchen  GameType = "kitchen"
 )
 
 type Lobby struct {
