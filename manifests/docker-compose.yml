@@ -1,0 +1,29 @@
+version: "3.9"
+
+networks:
+  games-net:
+    driver: bridge
+    name: games-net
+
+volumes:
+  hub-data:
+
+services:
+  hub:
+    build:
+      context: ..
+      dockerfile: docker/hub/Dockerfile
+    image: ssh-games-hub:latest
+    container_name: ssh-games-hub
+    restart: unless-stopped
+    ports:
+      - "2222:2222"
+    volumes:
+      - hub-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - games-net
+    environment:
+      LISTEN_ADDR: ":2222"
+      SNAKE_IMAGE: "ssh-games-snake:latest"
+      DOCKER_NETWORK: "games-net"
