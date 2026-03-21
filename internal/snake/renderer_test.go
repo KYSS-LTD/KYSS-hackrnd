@@ -30,12 +30,20 @@ func TestRenderFrameUsesExpandedArena(t *testing.T) {
 	state.Apples = []Point{{10, 10}}
 	state.Scores["snake"] = 3
 
-	frame := string(renderFrame(state, map[string]bool{}, []string{"snake"}))
+	frame := string(renderFrame(state, map[string]bool{}, []string{"snake"}, ""))
 
 	if count := strings.Count(frame, "\r\n"); count < Height+8 {
 		t.Fatalf("frame should have at least %d lines, got %d", Height+8, count)
 	}
-	if !strings.Contains(frame, strings.Repeat("═", Width)) {
-		t.Fatalf("frame should contain top border sized to width %d", Width)
+	if !strings.Contains(frame, strings.Repeat("═", Width*cellWidth)) {
+		t.Fatalf("frame should contain top border sized to width %d", Width*cellWidth)
+	}
+}
+
+func TestRenderFrameEmbedsDeathOverlay(t *testing.T) {
+	frame := string(renderFrame(newGameState(), map[string]bool{"snake": true}, []string{"snake"}, "snake"))
+
+	if !strings.Contains(frame, "ROUND LOST") {
+		t.Fatalf("frame should contain death overlay")
 	}
 }

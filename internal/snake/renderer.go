@@ -8,10 +8,11 @@ import (
 )
 
 const (
-	cellEmptyA = "·"
-	cellEmptyB = " "
-	cellBody   = "▓"
-	cellApple  = "☆"
+	cellWidth = 2
+
+	cellEmpty = "· "
+	cellBody  = "██"
+	cellApple = "◉◉"
 
 	colorReset     = "\x1b[0m"
 	colorBorder    = "\x1b[38;5;45m"
@@ -35,25 +36,32 @@ var snakePalette = []string{
 	"\x1b[38;5;141m",
 }
 
-func renderFrame(state *GameState, dead map[string]bool, order []string) []byte {
+func renderFrame(state *GameState, dead map[string]bool, order []string, overlayNick string) []byte {
 	var buf bytes.Buffer
+	fieldWidth := Width * cellWidth
+	overlay := deathOverlayLines(overlayNick)
+	overlayWidth := 0
+	if len(overlay) > 0 {
+		overlayWidth = len([]rune(overlay[0]))
+	}
+	overlayRow, overlayCol := overlayOrigin(fieldWidth, len(overlay), overlayWidth)
 
 	buf.WriteString("\x1b[H")
 	buf.WriteString(colorTitle)
 	buf.WriteString("  ╭─ SNAKE ARENA ─")
-	buf.WriteString(strings.Repeat("─", max(0, Width-15)))
+	buf.WriteString(strings.Repeat("─", max(0, fieldWidth-15)))
 	buf.WriteString("╮\r\n")
 	buf.WriteString(colorMuted)
 	buf.WriteString("  │ ")
 	buf.WriteString(colorSubtitle)
-	buf.WriteString("лови ☆, расти и переживи остальных")
+	buf.WriteString("лови ◉◉, расти и переживи остальных")
 	buf.WriteString(colorMuted)
-	buf.WriteString(strings.Repeat(" ", max(0, Width-34)))
+	buf.WriteString(strings.Repeat(" ", max(0, fieldWidth-35)))
 	buf.WriteString("│\r\n")
 
 	buf.WriteString(colorBorder)
 	buf.WriteString("  ╔")
-	for i := 0; i < Width; i++ {
+	for i := 0; i < fieldWidth; i++ {
 		buf.WriteString("═")
 	}
 	buf.WriteString("╗")
@@ -64,9 +72,13 @@ func renderFrame(state *GameState, dead map[string]bool, order []string) []byte 
 		buf.WriteString(colorBorder)
 		buf.WriteString("  ║")
 		buf.WriteString(colorReset)
-		for x := 0; x < Width; x++ {
-			buf.WriteString(cellAt(state, dead, x, y))
+
+		overlayLine := ""
+		if y >= overlayRow && y < overlayRow+len(overlay) {
+			overlayLine = overlay[y-overlayRow]
 		}
+		buf.WriteString(renderArenaRow(state, dead, y, overlayLine, overlayCol))
+
 		buf.WriteString(colorBorder)
 		buf.WriteString("║")
 		buf.WriteString(colorReset)
@@ -75,7 +87,7 @@ func renderFrame(state *GameState, dead map[string]bool, order []string) []byte 
 
 	buf.WriteString(colorBorder)
 	buf.WriteString("  ╚")
-	for i := 0; i < Width; i++ {
+	for i := 0; i < fieldWidth; i++ {
 		buf.WriteString("═")
 	}
 	buf.WriteString("╝")
@@ -87,6 +99,27 @@ func renderFrame(state *GameState, dead map[string]bool, order []string) []byte 
 	return buf.Bytes()
 }
 
+func renderArenaRow(state *GameState, dead map[string]bool, y int, overlayLine string, overlayCol int) string {
+	var buf bytes.Buffer
+	overlayStart := -1
+	overlayCells := 0
+	if overlayLine != "" {
+		overlayStart = overlayCol / cellWidth
+		overlayCells = len([]rune(overlayLine)) / cellWidth
+	}
+
+	for x := 0; x < Width; {
+		if overlayStart >= 0 && x == overlayStart {
+			buf.WriteString(colorOverlayBg + colorOverlay + overlayLine + colorReset)
+			x += overlayCells
+			continue
+		}
+		buf.WriteString(cellAt(state, dead, x, y))
+		x++
+	}
+	return buf.String()
+}
+
 func cellAt(state *GameState, dead map[string]bool, x, y int) string {
 	pt := Point{x, y}
 
@@ -96,7 +129,7 @@ func cellAt(state *GameState, dead map[string]bool, x, y int) string {
 		}
 		color := snakeColor(nick)
 		if s.Body[0].Equal(pt) {
-			return color + nickHead(nick) + colorReset
+			return color + headCell(nick) + colorReset
 		}
 		for _, b := range s.Body[1:] {
 			if b.Equal(pt) {
@@ -111,10 +144,7 @@ func cellAt(state *GameState, dead map[string]bool, x, y int) string {
 		}
 	}
 
-	if (x+y)%2 == 0 {
-		return colorMuted + cellEmptyA + colorReset
-	}
-	return colorMuted + cellEmptyB + colorReset
+	return colorMuted + cellEmpty + colorReset
 }
 
 func renderLeaderboard(buf *bytes.Buffer, state *GameState, dead map[string]bool, order []string) {
@@ -151,7 +181,7 @@ func renderLeaderboard(buf *bytes.Buffer, state *GameState, dead map[string]bool
 		return entries[i].nick < entries[j].nick
 	})
 
-	lineW := Width + 4
+	lineW := Width*cellWidth + 4
 	buf.WriteString(colorBorder + "  " + strings.Repeat("─", lineW) + colorReset + "\r\n")
 	buf.WriteString(colorTitle + "  ◇ PILOTS" + colorReset + "\r\n")
 
@@ -188,18 +218,18 @@ func renderLeaderboard(buf *bytes.Buffer, state *GameState, dead map[string]bool
 	buf.WriteString(colorMuted + " — выход\r\n" + colorReset)
 }
 
-func renderDeathOverlay(nick string) []byte {
-	var buf bytes.Buffer
+func deathOverlayLines(nick string) []string {
+	if strings.TrimSpace(nick) == "" {
+		return nil
+	}
 
-	col := 10
-	row := 6
 	name := trimRunes(nick, 12)
 	if name == "" {
 		name = "player"
 	}
 	nameLine := fmt.Sprintf("║   %-12s   ║", name)
 
-	lines := []string{
+	return []string{
 		"╔══════════════════╗",
 		"║   ROUND LOST     ║",
 		nameLine,
@@ -207,13 +237,27 @@ func renderDeathOverlay(nick string) []byte {
 		"║   to respawn     ║",
 		"╚══════════════════╝",
 	}
+}
 
-	for i, line := range lines {
-		buf.WriteString(fmt.Sprintf("\x1b[%d;%dH%s%s%s", row+i, col, colorOverlayBg, colorOverlay, line))
-		buf.WriteString(colorReset)
+func overlayOrigin(fieldWidth, overlayHeight, overlayWidth int) (int, int) {
+	row := max(0, (Height-overlayHeight)/2)
+	col := max(0, (fieldWidth-overlayWidth)/2)
+	if col%cellWidth != 0 {
+		col -= col % cellWidth
 	}
+	return row, col
+}
 
-	return buf.Bytes()
+func headCell(nick string) string {
+	head := nickHead(nick)
+	runes := []rune(head)
+	if len(runes) == 0 {
+		return "[]"
+	}
+	if len(runes) == 1 {
+		return string(runes[0]) + "█"
+	}
+	return string(runes[:2])
 }
 
 func nickHead(nick string) string {
