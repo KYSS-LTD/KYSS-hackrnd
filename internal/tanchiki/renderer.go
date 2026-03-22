@@ -28,6 +28,9 @@ const (
 	cWall   = "\x1b[38;5;180m"
 	cBar    = "\x1b[1;38;5;203m"
 	cShot   = "\x1b[1;38;5;15m"
+	cBlast1 = "\x1b[1;38;5;226m"
+	cBlast2 = "\x1b[1;38;5;220m"
+	cBlast3 = "\x1b[38;5;214m"
 )
 
 type tankDraw struct {
@@ -80,12 +83,22 @@ func renderFrame(g *Game, viewer string, order []string) []byte {
 
 	b.WriteString(cBorder + "  +" + strings.Repeat("-", fieldWidth) + "+  +" + strings.Repeat("-", panelWidth) + "+\r\n" + cReset)
 	b.WriteString(cMuted + "  Move: arrows/WASD  Fire: Space/F  Quit: Q\r\n" + cReset)
-	b.WriteString(cMuted + "  Walls: #/=  Barrels: OO\r\n" + cReset)
+	b.WriteString(cMuted + "  Walls: #/=  Barrels: OO  Blast: @@ ** ++\r\n" + cReset)
 
 	return b.Bytes()
 }
 
 func renderCell(g *Game, p point, bulletMap map[point]bool, tankMap map[point]tankDraw) (string, string) {
+	if ttl, ok := g.blasts[p]; ok {
+		switch ttl {
+		case 3:
+			return "@@", cBlast1
+		case 2:
+			return "**", cBlast2
+		default:
+			return "++", cBlast3
+		}
+	}
 	if t, ok := tankMap[p]; ok {
 		return t.glyph, t.color
 	}

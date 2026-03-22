@@ -15,6 +15,7 @@ const (
 	tickRate         = 180 * time.Millisecond
 	respawnTicks     = 18
 	fireCooldown     = 4
+	explosionTicks   = 3
 )
 
 type dir struct{ dx, dy int }
@@ -62,6 +63,7 @@ type Game struct {
 	walls   map[point]int
 	barrels map[point]bool
 	bullets []bullet
+	blasts  map[point]int
 
 	joinCh  chan joinEvent
 	leaveCh chan string
@@ -87,6 +89,7 @@ func NewGame() *Game {
 		tanks:   make(map[string]*tank),
 		walls:   make(map[point]int),
 		barrels: make(map[point]bool),
+		blasts:  make(map[point]int),
 		joinCh:  make(chan joinEvent, 8),
 		leaveCh: make(chan string, 8),
 		inputCh: make(chan inputEvent, 64),
@@ -190,6 +193,7 @@ func (g *Game) handleJoin(ev joinEvent) error {
 }
 
 func (g *Game) tick(inputs map[string]inputState) {
+	g.stepExplosions()
 	g.stepBullets()
 
 	for nick, t := range g.tanks {
@@ -220,6 +224,17 @@ func (g *Game) tick(inputs map[string]inputState) {
 				g.spawnBullet(bp, t.dir, nick)
 			}
 		}
+	}
+}
+
+func (g *Game) stepExplosions() {
+	for p, ttl := range g.blasts {
+		ttl--
+		if ttl <= 0 {
+			delete(g.blasts, p)
+			continue
+		}
+		g.blasts[p] = ttl
 	}
 }
 
@@ -303,6 +318,9 @@ func (g *Game) explode(center point, owner string) {
 				p := point{c.x + dx, c.y + dy}
 				if !g.inBounds(p) {
 					continue
+				}
+				if g.blasts[p] < explosionTicks {
+					g.blasts[p] = explosionTicks
 				}
 				if hp, ok := g.walls[p]; ok {
 					hp--
