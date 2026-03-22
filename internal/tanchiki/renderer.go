@@ -51,7 +51,7 @@ func renderFrame(g *Game, viewer string, order []string) []byte {
 		tankMap[t.pos] = tankDraw{glyph: tankGlyph(t.dir), color: tankColors[t.colorIdx%len(tankColors)]}
 	}
 
-	b.WriteString("\x1b[H")
+	b.WriteString("\x1b[H\x1b[2J")
 	b.WriteString(cTitle + "  TANCHIKI" + cReset + cMuted + "  multiplayer tank arena" + cReset + "\r\n")
 	b.WriteString(cBorder + "  +" + strings.Repeat("-", fieldWidth) + "+  +" + strings.Repeat("-", panelWidth) + "+\r\n" + cReset)
 
@@ -79,8 +79,8 @@ func renderFrame(g *Game, viewer string, order []string) []byte {
 	}
 
 	b.WriteString(cBorder + "  +" + strings.Repeat("-", fieldWidth) + "+  +" + strings.Repeat("-", panelWidth) + "+\r\n" + cReset)
-	b.WriteString(cMuted + "  Arrows/WASD" + cText + " move  " + cMuted + "Space/F" + cText + " fire  " + cMuted + "Q" + cText + " quit\r\n" + cReset)
-	b.WriteString(cMuted + "  #/=" + cText + " destructible walls  " + cMuted + "OO" + cText + " explosive barrels\r\n" + cReset)
+	b.WriteString(cMuted + "  Move: arrows/WASD  Fire: Space/F  Quit: Q\r\n" + cReset)
+	b.WriteString(cMuted + "  Walls: #/=  Barrels: OO\r\n" + cReset)
 
 	return b.Bytes()
 }
