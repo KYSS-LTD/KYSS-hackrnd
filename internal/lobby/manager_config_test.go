@@ -9,4 +9,7 @@ func TestMaxPlayersForGame(t *testing.T) {
 	if got := maxPlayersForGame(GamePingPong); got != 2 {
 		t.Fatalf("maxPlayersForGame(GamePingPong) = %d, want 2", got)
 	}
+	if got := maxPlayersForGame(GameTanchiki); got != 6 {
+		t.Fatalf("maxPlayersForGame(GameTanchiki) = %d, want 6", got)
+	}
 }
