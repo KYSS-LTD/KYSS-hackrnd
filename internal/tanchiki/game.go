@@ -12,9 +12,10 @@ const (
 	arenaW           = 42
 	arenaH           = 20
 	maxTanchikiUsers = 6
-	tickRate         = 120 * time.Millisecond
+	tickRate         = 180 * time.Millisecond
 	respawnTicks     = 18
 	fireCooldown     = 4
+	explosionTicks   = 3
 )
 
 type dir struct{ dx, dy int }
@@ -47,8 +48,9 @@ type bullet struct {
 }
 
 type inputState struct {
-	move dir
-	fire bool
+	move    dir
+	moveTTL int
+	fire    bool
 }
 
 type Game struct {
@@ -61,6 +63,7 @@ type Game struct {
 	walls   map[point]int
 	barrels map[point]bool
 	bullets []bullet
+	blasts  map[point]int
 
 	joinCh  chan joinEvent
 	leaveCh chan string
@@ -86,6 +89,7 @@ func NewGame() *Game {
 		tanks:   make(map[string]*tank),
 		walls:   make(map[point]int),
 		barrels: make(map[point]bool),
+		blasts:  make(map[point]int),
 		joinCh:  make(chan joinEvent, 8),
 		leaveCh: make(chan string, 8),
 		inputCh: make(chan inputEvent, 64),
@@ -139,12 +143,16 @@ func (g *Game) loop() {
 			switch ev.key {
 			case "up", "w", "W", "ц", "Ц":
 				in.move = dirUp
+				in.moveTTL = 1
 			case "down", "s", "S", "ы", "Ы":
 				in.move = dirDown
+				in.moveTTL = 1
 			case "left", "a", "A", "ф", "Ф":
 				in.move = dirLeft
+				in.moveTTL = 1
 			case "right", "d", "D", "в", "В":
 				in.move = dirRight
+				in.moveTTL = 1
 			case " ", "f", "F", "а", "А":
 				in.fire = true
 			}
@@ -155,6 +163,12 @@ func (g *Game) loop() {
 			g.tick(inputs)
 			for nick := range inputs {
 				st := inputs[nick]
+				if st.moveTTL > 0 {
+					st.moveTTL--
+					if st.moveTTL == 0 {
+						st.move = dir{}
+					}
+				}
 				st.fire = false
 				inputs[nick] = st
 			}
@@ -179,6 +193,9 @@ func (g *Game) handleJoin(ev joinEvent) error {
 }
 
 func (g *Game) tick(inputs map[string]inputState) {
+	g.stepExplosions()
+	g.stepBullets()
+
 	for nick, t := range g.tanks {
 		if !t.alive {
 			t.respawnIn--
@@ -204,13 +221,48 @@ func (g *Game) tick(inputs map[string]inputState) {
 		if in.fire && t.cooldown == 0 {
 			bp := point{t.pos.x + t.dir.dx, t.pos.y + t.dir.dy}
 			if g.inBounds(bp) {
-				g.bullets = append(g.bullets, bullet{pos: bp, dir: t.dir, owner: nick})
-				t.cooldown = fireCooldown
+				g.spawnBullet(bp, t.dir, nick)
 			}
 		}
 	}
+}
 
-	g.stepBullets()
+func (g *Game) stepExplosions() {
+	for p, ttl := range g.blasts {
+		ttl--
+		if ttl <= 0 {
+			delete(g.blasts, p)
+			continue
+		}
+		g.blasts[p] = ttl
+	}
+}
+
+func (g *Game) spawnBullet(pos point, d dir, owner string) {
+	if hp, ok := g.walls[pos]; ok {
+		hp--
+		if hp <= 0 {
+			delete(g.walls, pos)
+		} else {
+			g.walls[pos] = hp
+		}
+	} else if g.barrels[pos] {
+		g.explode(pos, owner)
+	} else {
+		for nick, t := range g.tanks {
+			if t.alive && t.pos == pos {
+				g.killTank(nick, owner)
+				if shooter := g.tanks[owner]; shooter != nil {
+					shooter.cooldown = fireCooldown
+				}
+				return
+			}
+		}
+		g.bullets = append(g.bullets, bullet{pos: pos, dir: d, owner: owner})
+	}
+	if shooter := g.tanks[owner]; shooter != nil {
+		shooter.cooldown = fireCooldown
+	}
 }
 
 func (g *Game) stepBullets() {
@@ -266,6 +318,9 @@ func (g *Game) explode(center point, owner string) {
 				p := point{c.x + dx, c.y + dy}
 				if !g.inBounds(p) {
 					continue
+				}
+				if g.blasts[p] < explosionTicks {
+					g.blasts[p] = explosionTicks
 				}
 				if hp, ok := g.walls[p]; ok {
 					hp--
